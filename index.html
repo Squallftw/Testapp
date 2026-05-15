@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BatiTrack — Gestion de chantier</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Error tracking (optional — no-op without sentry-config.js + DSN).
+       Loaded in <head> so it can capture boot-time errors. -->
+  <script src="https://browser.sentry-cdn.com/7.99.0/bundle.min.js" crossorigin="anonymous"></script>
+  <script src="sentry-config.js" onerror="this.remove()"></script>
+  <script src="sentry-init.js"></script>
+</head>
+<body>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-user">
+        <span class="avatar" id="user-avatar">B</span>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="user-label">BatiTrack</div>
+          <div class="sidebar-user-role">Chef de chantier</div>
+        </div>
+      </div>
+
+      <div class="sidebar-search">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+        <input type="text" placeholder="Rechercher..." />
+        <span class="kbd">⌘K</span>
+      </div>
+
+      <nav class="nav-list" id="nav-primary">
+        <button class="nav-item active" data-target="overview">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-item" data-target="planning">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <span>Planning</span>
+        </button>
+        <button class="nav-item" data-target="alertes">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+          <span>Alertes</span>
+          <span class="nav-badge hide" id="alert-tab-badge">0</span>
+        </button>
+      </nav>
+
+      <div class="nav-section-label">Ressources</div>
+      <nav class="nav-list" id="nav-ressources">
+        <button class="nav-item" data-target="ressources" data-sub="apercu">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>
+          <span>Aperçu</span>
+        </button>
+        <button class="nav-item" data-target="ressources" data-sub="pointage">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          <span>Pointage</span>
+        </button>
+        <button class="nav-item" data-target="ressources" data-sub="calendrier">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <span>Calendrier</span>
+        </button>
+        <button class="nav-item" data-target="ressources" data-sub="soustraitants">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Sous-traitants</span>
+        </button>
+        <button class="nav-item" data-target="ressources" data-sub="materiaux">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.27 6.96 8.73 5.05 8.73-5.05M12 22.08V12"/></svg>
+          <span>Matériaux</span>
+        </button>
+        <button class="nav-item" data-target="ressources" data-sub="materiel">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          <span>Matériel</span>
+        </button>
+      </nav>
+
+      <div class="nav-section-label">Budget</div>
+      <nav class="nav-list" id="nav-budget">
+        <button class="nav-item" data-target="budget" data-sub="apercu">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+          <span>Aperçu</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <button class="signout-btn hide" id="signout-btn">Déconnexion</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-info">
+          <h1 class="topbar-title" id="page-title">Dashboard</h1>
+          <p class="topbar-subtitle" id="project-meta"></p>
+        </div>
+        <div class="topbar-actions">
+          <span class="save-state hide" id="save-state" title="État de la sauvegarde">
+            <span class="save-state-dot" aria-hidden="true"></span>
+            <span class="save-state-text"></span>
+          </span>
+          <div class="bell" title="Alertes">
+            🔔
+            <span class="bell-badge hide" id="alert-count">0</span>
+          </div>
+        </div>
+      </header>
+      <div id="app"></div>
+    </main>
+  </div>
+
+  <!-- Supabase SDK (optional — only needed if config.js sets SUPABASE_CONFIG) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Optional config: copy config.example.js → config.js and fill in keys.
+       If config.js is missing the page still works (localStorage fallback). -->
+  <script src="config.js" onerror="this.remove()"></script>
+  <script src="supabase-client.js"></script>
+
+  <!-- Reusable UI primitives — must load before auth-ui.js and app.js. -->
+  <script src="toast.js"></script>
+  <script src="modal.js"></script>
+  <script src="auth-ui.js"></script>
+
+  <script src="gantt-logic.js"></script>
+  <script src="workforce-logic.js"></script>
+  <script src="materials-logic.js"></script>
+  <script src="equipment-logic.js"></script>
+  <script src="budget-logic.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

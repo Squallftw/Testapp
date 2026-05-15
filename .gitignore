@@ -1,0 +1,32 @@
+# Secrets — never commit
+config.js
+sentry-config.js
+
+# Local-only dev tooling (kept on disk, not deployed to GitHub Pages)
+tests/
+e2e/
+jest.config.js
+playwright.config.js
+package.json
+package-lock.json
+node_modules/
+serve.js
+
+# Local docs / validation mockup
+README.md
+mockup.html
+
+# Test / build outputs
+test-results/
+playwright-report/
+screenshots/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local agent / planning files
+.claude/
+PLAN.md
