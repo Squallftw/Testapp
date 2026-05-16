@@ -154,7 +154,9 @@ const NAV_ITEMS = [
   { id: 'dashboard', label: 'Tableau de bord', icon: 'Dashboard' },
   { kind: 'header', label: 'Gestion de projet' },
   { id: 'planning',  label: 'Planning',         icon: 'Calendar' },
-  { id: 'chantiers', label: 'Chantiers',       icon: 'Chantier' },
+  // 'Chantiers' nav entry removed — the topbar switcher is the new entry point.
+  // The /chantiers route still exists (gate.PROTECTED_ROUTES); the switcher's
+  // "Gérer mes chantiers" link reaches the management page directly.
   { kind: 'header', label: 'Ressources' },
   { id: 'pointage',     label: 'Pointage',     icon: 'Pointage' },
   { id: 'affectations', label: 'Affectations', icon: 'Ouvrier' },
