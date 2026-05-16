@@ -233,7 +233,10 @@ function buildPointage() {
   return { pointage, adjustments };
 }
 
-const __PT_DEMO = buildPointage();
+// Only compute demo pointage in demo mode. Real users may have worker IDs
+// outside the hardcoded workerChantier map, which would crash chantierFor.
+// The result is discarded by __batiPick for non-demo users anyway.
+const __PT_DEMO = __BATI_DEMO ? buildPointage() : { pointage: {}, adjustments: {} };
 const POINTAGE     = __batiPick('pointage',    {}, __PT_DEMO.pointage);
 const ADJUSTMENTS  = __batiPick('adjustments', {}, __PT_DEMO.adjustments);
 
