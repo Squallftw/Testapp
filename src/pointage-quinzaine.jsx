@@ -38,17 +38,13 @@ function PointageQuinzaine({ ctx, currentQ, onSwitchQ, onSwitchMois }) {
   const [auditOpen, setAuditOpen] = usePoState(false);
   const [showCopyConfirm, setShowCopyConfirm] = usePoState(false);
 
+  // Rows are NOT filtered by chantier — chantier scope is applied at the cell
+  // level (popover default = ctx.currentChantierId) and to cost rollups. Filtering
+  // rows would hide newly-added workers who have no pointage entries yet, blocking
+  // the user from recording their first entry.
   const filteredWorkers = OUVRIERS.filter(w => {
     if (filterRole !== 'all' && w.role !== filterRole) return false;
     if (search && !w.nom.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterChantier !== 'all') {
-      // worker must have at least one P on this chantier this quinzaine
-      const has = days.some(d => {
-        const c = ctx.pointage[w.id]?.[dateKey(year, monthIdx, d)];
-        return c?.statut === 'P' && c.chantierId === filterChantier;
-      });
-      if (!has) return false;
-    }
     return true;
   });
 

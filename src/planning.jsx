@@ -183,19 +183,26 @@ function Planning({ ctx }) {
   });
 
   function saveTask(updated, groupId) {
-    setPlan(prev => {
-      // Remove from any group except target, then upsert into target
-      return prev.map(g => {
-        if (g.id === groupId) {
-          const exists = g.children.some(t => t.id === updated.id);
-          return { ...g, children: exists
-            ? g.children.map(t => t.id === updated.id ? updated : t)
-            : [...g.children, updated] };
-        }
-        const filtered = g.children.filter(t => t.id !== updated.id);
-        return filtered.length === g.children.length ? g : { ...g, children: filtered };
+    if (groupId === '__none__') {
+      // No parent picked — create a brand-new top-level group whose label is the
+      // task's name and put this task as the group's only child.
+      const newGroupId = 'g-' + Date.now().toString(36);
+      setPlan(prev => [...prev, { id: newGroupId, label: updated.label, children: [updated] }]);
+    } else {
+      setPlan(prev => {
+        // Remove from any group except target, then upsert into target
+        return prev.map(g => {
+          if (g.id === groupId) {
+            const exists = g.children.some(t => t.id === updated.id);
+            return { ...g, children: exists
+              ? g.children.map(t => t.id === updated.id ? updated : t)
+              : [...g.children, updated] };
+          }
+          const filtered = g.children.filter(t => t.id !== updated.id);
+          return filtered.length === g.children.length ? g : { ...g, children: filtered };
+        });
       });
-    });
+    }
     // Clear any drag override so the new explicit start sticks
     setTaskOverrides(prev => {
       if (!(updated.id in prev)) return prev;
@@ -211,7 +218,9 @@ function Planning({ ctx }) {
   }
 
   function openCreate() {
-    setEditingTask({ mode: 'create', task: null, groupId: plan[0].id });
+    // Parent defaults to "— Aucune"; if there are existing groups the user can
+    // pick one inside the modal. plan can safely be empty here.
+    setEditingTask({ mode: 'create', task: null, groupId: '__none__' });
   }
 
   const ROW_H = 36;
@@ -344,7 +353,7 @@ function Planning({ ctx }) {
                               className="px-2.5 py-1 text-xs font-semibold rounded text-stone-600 hover:bg-white">+</button>
                     </div>
                     <Btn size="sm" icon={<Icons.Doc size={13}/>}>Exporter</Btn>
-                    <Btn size="sm" variant="primary" icon={<Icons.Plus size={13}/>} onClick={openCreate}>Nouvelle tâche</Btn>
+                    <Btn size="sm" variant="primary" icon={<Icons.Plus size={13}/>} onClick={openCreate}>Tâche</Btn>
                   </>}/>
 
       {/* Legend + summary */}
@@ -504,7 +513,8 @@ function Planning({ ctx }) {
           task={editingTask.task}
           groupId={editingTask.groupId}
           plan={plan}
-          getStartDate={() => editingTask.task ? taskStartDate(editingTask.task) : addDaysD(TIMELINE_START, todayOffset)}
+          chantier={CHANTIERS.find(c => c.id === chantierId)}
+          initialStart={editingTask.task ? taskStartDate(editingTask.task) : null}
           onSave={(updated, gId) => { saveTask(updated, gId); setEditingTask(null); setSelectedId(updated.id); }}
           onDelete={() => { deleteTask(editingTask.task.id); setEditingTask(null); }}
           onClose={() => setEditingTask(null)}/>
@@ -518,26 +528,63 @@ function toISODate(d) {
   return `${y}-${m}-${day}`;
 }
 
-function TaskEditModal({ mode, task, groupId, plan, getStartDate, onSave, onDelete, onClose }) {
-  const startD = getStartDate();
+function TaskEditModal({ mode, task, groupId, plan, chantier, initialStart, onSave, onDelete, onClose }) {
   const [label, setLabel] = usePlState(task?.label || '');
-  const [groupSel, setGroupSel] = usePlState(groupId || plan[0].id);
-  const [startStr, setStartStr] = usePlState(toISODate(startD));
-  const [duration, setDuration] = usePlState(task?.duration || 7);
+  const [groupSel, setGroupSel] = usePlState(groupId || '__none__');
+  const [startStr, setStartStr] = usePlState(initialStart ? toISODate(initialStart) : '');
+  const [duration, setDuration] = usePlState(task?.duration || 5);
   const [status, setStatus] = usePlState(task?.status || 'todo');
-  const [notes, setNotes] = usePlState(task?.notes || '');
+
+  // End date of a persisted task, ignoring drag overrides (they're previews,
+  // not authoritative).
+  function endOfTask(t) {
+    const s = dateFromYMD(t.start[0], t.start[1], t.start[2]);
+    return addDaysD(s, t.duration - 1);
+  }
+
+  // Sequential placement: when the user leaves the start date empty, chain
+  // after the last task in the chosen scope.
+  function computeSequentialStart() {
+    let pool;
+    if (groupSel === '__none__') {
+      pool = plan.flatMap(g => g.children);
+    } else {
+      const g = plan.find(x => x.id === groupSel);
+      pool = (g && g.children) || [];
+    }
+    if (pool.length === 0) {
+      if (chantier && chantier.dateStart) {
+        const [y, m, d] = chantier.dateStart.split('-').map(Number);
+        return dateFromYMD(y, m - 1, d);
+      }
+      return new Date();
+    }
+    let latest = endOfTask(pool[0]);
+    for (let i = 1; i < pool.length; i++) {
+      const e = endOfTask(pool[i]);
+      if (e > latest) latest = e;
+    }
+    return addDaysD(latest, 1);
+  }
 
   function save() {
     if (!label.trim()) return;
-    const [y, m, d] = startStr.split('-').map(Number);
+    let y, m, d;
+    if (startStr) {
+      [y, m, d] = startStr.split('-').map(Number);
+    } else {
+      const seq = computeSequentialStart();
+      y = seq.getFullYear();
+      m = seq.getMonth() + 1;
+      d = seq.getDate();
+    }
     const updated = {
       ...(task || {}),
       id: task?.id || ('t-' + Date.now().toString(36)),
       label: label.trim(),
-      start: [y, m-1, d],
+      start: [y, m - 1, d],
       duration: Math.max(1, parseInt(duration, 10) || 1),
       status,
-      notes: notes.trim() || undefined
     };
     onSave(updated, groupSel);
   }
@@ -546,51 +593,36 @@ function TaskEditModal({ mode, task, groupId, plan, getStartDate, onSave, onDele
     <Modal title={mode === 'create' ? 'Nouvelle tâche' : 'Modifier la tâche'} onClose={onClose} width="max-w-lg">
       <div className="space-y-4">
         <div>
-          <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Nom de la tâche</div>
+          <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Nom</div>
           <input className="bati-input" autoFocus value={label} onChange={e => setLabel(e.target.value)}
                  placeholder="ex. DALLAGES, MAÇONNERIE, ÉLECTRICITÉ…"/>
         </div>
 
-        <div>
-          <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Sous-tâche de</div>
-          <select className="bati-input" value={groupSel} onChange={e => setGroupSel(e.target.value)}>
-            {plan.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
-          </select>
-        </div>
-
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Date de début</div>
-            <input type="date" className="bati-input" value={startStr} onChange={e => setStartStr(e.target.value)}/>
-          </div>
           <div>
             <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Durée (jours)</div>
             <input type="number" min="1" className="bati-input" value={duration} onChange={e => setDuration(e.target.value)}/>
           </div>
-        </div>
-
-        <div>
-          <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Statut</div>
-          <div className="grid grid-cols-4 gap-1.5">
-            {STATUS_ORDER.map(k => {
-              const sc = STATUS_COLORS[k];
-              const active = status === k;
-              return (
-                <button key={k} onClick={() => setStatus(k)}
-                        className={`px-2 py-2 rounded-lg text-xs font-semibold border transition flex items-center gap-1.5 justify-center ${active ? 'shadow-sm' : 'text-stone-500'}`}
-                        style={{ borderColor: active ? sc.bar : '#E8E2D8', background: active ? '#FAF7F1' : 'white', color: active ? '#1F2421' : undefined }}>
-                  <span className="w-2 h-2 rounded-full" style={{ background: sc.dot }}/>
-                  {sc.label}
-                </button>
-              );
-            })}
+          <div>
+            <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Statut</div>
+            <select className="bati-input" value={status} onChange={e => setStatus(e.target.value)}>
+              {STATUS_ORDER.map(k => <option key={k} value={k}>{STATUS_COLORS[k].label}</option>)}
+            </select>
           </div>
         </div>
 
         <div>
-          <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Notes (optionnel)</div>
-          <textarea className="bati-input" rows="2" value={notes} onChange={e => setNotes(e.target.value)}
-                    placeholder="Précisions, conditions, dépendances…"/>
+          <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Tâche parente</div>
+          <select className="bati-input" value={groupSel} onChange={e => setGroupSel(e.target.value)}>
+            <option value="__none__">— Aucune (tâche principale)</option>
+            {plan.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Date de début</div>
+          <input type="date" className="bati-input" value={startStr} onChange={e => setStartStr(e.target.value)}/>
+          <div className="text-[11px] text-stone-500 mt-1">Vide = séquentiel</div>
         </div>
 
         <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor:'#F0EAE0' }}>
@@ -602,7 +634,7 @@ function TaskEditModal({ mode, task, groupId, plan, getStartDate, onSave, onDele
           <div className="flex gap-2">
             <Btn onClick={onClose}>Annuler</Btn>
             <Btn variant="primary" onClick={save} disabled={!label.trim()}>
-              {mode === 'create' ? 'Créer' : 'Enregistrer'}
+              Enregistrer
             </Btn>
           </div>
         </div>
