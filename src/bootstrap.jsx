@@ -5,6 +5,12 @@
 // ============================================================================
 
 const APP_MODULES = [
+  // Onboarding pure-logic modules — must load before app.jsx so the gate can run.
+  'src/onboarding/validate-chantier.js',
+  'src/onboarding/chantier-store.js',
+  'src/onboarding/gate.js',
+  'src/onboarding/onboarding-screen.jsx',
+
   'src/helpers.jsx',
   'src/data.jsx',
   'src/icons.jsx',

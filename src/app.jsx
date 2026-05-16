@@ -12,7 +12,68 @@ window.__BATI_PERSIST_PATCH = function patch(slice) {
 };
 
 function App() {
-  const [page, setPage] = useAppState('pointage');
+  // ── Onboarding gate ────────────────────────────────────────────────────
+  // window.bati.onboarding is provided by src/onboarding/{gate,chantier-store,
+  // validate-chantier}.js — loaded before this file in bootstrap.jsx.
+  const __gate = window.bati && window.bati.onboarding;
+  function __currentSession() {
+    return window.__BATI_USER ? { user: { id: window.__BATI_USER.id } } : null;
+  }
+  function __decide(hash) {
+    if (!__gate) return { allow: true, page: 'dashboard' };
+    return __gate.decideRoute({
+      session: __currentSession(),
+      userState: window.__BATI_USER_DATA,
+      requestedHash: hash != null ? hash : (typeof window !== 'undefined' ? window.location.hash : ''),
+    });
+  }
+  function __applyRedirect(decision) {
+    if (decision && decision.redirectTo && typeof window !== 'undefined') {
+      const target = decision.redirectTo.replace(/^#/, '');
+      if (window.location.hash !== '#' + target) window.location.hash = target;
+    }
+  }
+  const [decision, setDecision] = useAppState(() => __decide());
+
+  useAppEff(() => {
+    __applyRedirect(decision);
+    function onHash() { setDecision(__decide()); }
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useAppEff(() => { __applyRedirect(decision); }, [decision]);
+
+  function __onChantierCreated(chantier) {
+    // Hot-update the in-memory CHANTIERS list so the main shell sees the new
+    // chantier without a page reload.
+    try { if (typeof CHANTIERS !== 'undefined' && Array.isArray(CHANTIERS)) CHANTIERS.push(chantier); } catch (_) {}
+    const after = __gate.decideRoute({
+      session: __currentSession(),
+      userState: window.__BATI_USER_DATA,
+      requestedHash: window.location.hash,
+      justCreatedChantier: true,
+    });
+    __applyRedirect(after);
+    // Schedule a re-decide on the next tick, after the hashchange has fired.
+    setTimeout(() => setDecision(__decide()), 0);
+  }
+
+  const [page, setPage] = useAppState(() => (decision && decision.page) || 'dashboard');
+
+  // Keep `page` synced with gate decision (covers hashchange + cross-tab updates).
+  useAppEff(() => {
+    if (decision && decision.allow && decision.page && decision.page !== page) {
+      setPage(decision.page);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decision]);
+
+  function __navigate(targetPage) {
+    setPage(targetPage);
+    window.location.hash = '/' + targetPage;
+  }
+
   const [lang, setLang] = useAppState('FR');
   const [mobileMenu, setMobileMenu] = useAppState(false);
 
@@ -227,11 +288,18 @@ function App() {
 
   const isRTL = lang === 'AR';
 
+  // ── Render branch: gate takes precedence ─────────────────────────────────
+  if (decision && decision.redirectTo) return null;
+  if (decision && decision.allow && decision.page === 'onboarding') {
+    const nextPath = __gate.parseHash(window.location.hash).query.next || null;
+    return <OnboardingScreen nextPath={nextPath} onCreated={__onChantierCreated}/>;
+  }
+
   return (
     <div className={`min-h-screen ${isRTL ? 'rtl' : 'ltr'}`} dir={isRTL ? 'rtl' : 'ltr'} style={{ background:'#FAF7F1' }}>
       <TopBar lang={lang} setLang={setLang} onMenu={() => setMobileMenu(true)}/>
       <div className="flex">
-        <Sidebar current={page} onNav={(p) => { setPage(p); setOpenChantier(null); setOpenOuvrier(null); }}
+        <Sidebar current={page} onNav={(p) => { __navigate(p); setOpenChantier(null); setOpenOuvrier(null); }}
                  mobileOpen={mobileMenu} onMobileClose={() => setMobileMenu(false)}
                  badges={{ pointage: (() => {
                    const dk = dateKey(TODAY.year, TODAY.monthIdx, TODAY.day);
