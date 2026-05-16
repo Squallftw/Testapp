@@ -49,21 +49,14 @@ function OnboardingScreen({ onCreated, nextPath }) {
       if (window.__BATI_PERSIST_PATCH) {
         window.__BATI_PERSIST_PATCH({ chantiers: r.userState.chantiers });
       }
-      // Try to force a synchronous flush so a hard refresh straight after
-      // submit doesn't lose the new chantier. Best-effort: if the saver isn't
-      // ready (offline / not wired) we still proceed locally.
       try {
         if (window.__BATI_SAVER && typeof window.__BATI_SAVER.flush === 'function') {
           await window.__BATI_SAVER.flush();
         }
       } catch (err) {
         setServerErr('Le chantier est créé localement, mais la sauvegarde a échoué : ' + (err && err.message || err));
-        // Don't block — local state has the chantier; the saver will retry.
       }
       onCreated && onCreated(r.chantier);
-      // Intentionally do NOT clear submittedRef on success — the component is
-      // about to unmount when the gate decision flips, and any queued clicks
-      // from a rapid double-click must not re-enter this handler.
     } catch (err) {
       submittedRef.current = false;
       throw err;

@@ -14,7 +14,6 @@
   }
 }(typeof self !== 'undefined' ? self : (typeof globalThis !== 'undefined' ? globalThis : this), function (validate) {
 
-  // Earth-toned palette matching the existing seed chantiers (data.jsx).
   var PALETTE = [
     { color: '#0E5460', colorSoft: '#D8E5E7' },
     { color: '#C25B3F', colorSoft: '#F2DCD3' },
@@ -27,7 +26,6 @@
   var __idCounter = 0;
   function nextId() {
     __idCounter += 1;
-    // Combine timestamp, counter, and randomness so rapid successive calls don't collide.
     var t = Date.now().toString(36);
     var r = Math.random().toString(36).slice(2, 8);
     var c = __idCounter.toString(36);
@@ -65,7 +63,6 @@
       budgetMO: v.normalized.budgetMO,
       type: v.normalized.type,
       manager: v.normalized.manager || '',
-      // Derived / defaulted fields.
       budget: v.normalized.budgetMO,
       budgetMaterials: 0,
       budgetLabor: v.normalized.budgetMO,
@@ -77,7 +74,6 @@
       createdAt: Date.now(),
     };
 
-    // Clone everything one level deep so we never mutate the caller's blob.
     var next = {};
     Object.keys(prev).forEach(function (k) { next[k] = prev[k]; });
     var prevList = Array.isArray(prev.chantiers) ? prev.chantiers.slice() : [];

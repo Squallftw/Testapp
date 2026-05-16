@@ -1,9 +1,239 @@
 // Chantiers, Ouvriers, Paramètres screens
-const { useState: useExState, useMemo: useExMemo } = React;
+const { useState: useExState, useMemo: useExMemo, useRef: useExRef } = React;
+
+// ─── CHANTIER FORM (create + edit) ────────────────────────────
+// Used both for the "Nouveau chantier" modal on the Chantiers page and for
+// the "Modifier" button in ChantierDetail. In edit mode (when `initial` is
+// passed) the chantier object is updated in place; in create mode a new
+// chantier is appended via window.bati.onboarding.addChantier.
+function ChantierFormModal({ onClose, initial }) {
+  const ob = window.bati && window.bati.onboarding;
+  const isEdit = !!initial;
+  const [form, setForm] = useExState(() => ({
+    name:         initial?.name        || '',
+    client:       initial?.client      || '',
+    address:      initial?.address     || '',
+    dateStart:    initial?.dateStart   || '',
+    dateEndPrev:  initial?.dateEndPrev || '',
+    budgetMO:     initial?.budgetMO != null ? String(initial.budgetMO) : '',
+    type:         initial?.type        || (ob ? ob.CHANTIER_TYPES[0] : 'Villa'),
+    manager:      initial?.manager     || '',
+  }));
+  const [errors, setErrors] = useExState({});
+  const submittedRef = useExRef(false);
+
+  function update(field, value) {
+    setForm(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n; });
+  }
+
+  function submit() {
+    if (submittedRef.current || !ob) return;
+    const v = ob.validateChantier(form);
+    if (!v.valid) { setErrors(v.errors); return; }
+    submittedRef.current = true;
+
+    if (isEdit) {
+      const idx = CHANTIERS.findIndex(x => x.id === initial.id);
+      if (idx >= 0) {
+        CHANTIERS[idx] = { ...CHANTIERS[idx], ...v.normalized };
+        const userChantiers = (window.__BATI_USER_DATA && window.__BATI_USER_DATA.chantiers) || CHANTIERS;
+        const uIdx = userChantiers.findIndex(x => x.id === initial.id);
+        if (uIdx >= 0) userChantiers[uIdx] = CHANTIERS[idx];
+        if (window.__BATI_PERSIST_PATCH) window.__BATI_PERSIST_PATCH({ chantiers: CHANTIERS.slice() });
+      }
+    } else {
+      const prev = window.__BATI_USER_DATA || {};
+      const r = ob.addChantier(prev, form);
+      if (!r.ok) { setErrors(r.errors || {}); submittedRef.current = false; return; }
+      window.__BATI_USER_DATA = r.userState;
+      try { CHANTIERS.push(r.chantier); } catch (_) {}
+      if (window.__BATI_PERSIST_PATCH) window.__BATI_PERSIST_PATCH({ chantiers: r.userState.chantiers });
+    }
+    onClose();
+  }
+
+  return (
+    <Modal title={isEdit ? 'Modifier le chantier' : 'Nouveau chantier'} onClose={onClose}>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Nom du chantier">
+            <input className="bati-input" maxLength={120} value={form.name}
+                   onChange={e => update('name', e.target.value)} aria-invalid={!!errors.name}/>
+            {errors.name && <div className="text-[11px] text-red-700 mt-1">{errors.name}</div>}
+          </Field>
+          <Field label="Type">
+            <select className="bati-input" value={form.type} onChange={e => update('type', e.target.value)}>
+              {(ob ? ob.CHANTIER_TYPES : ['Villa']).map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+            {errors.type && <div className="text-[11px] text-red-700 mt-1">{errors.type}</div>}
+          </Field>
+          <Field label="Client">
+            <input className="bati-input" maxLength={120} value={form.client}
+                   onChange={e => update('client', e.target.value)} aria-invalid={!!errors.client}/>
+            {errors.client && <div className="text-[11px] text-red-700 mt-1">{errors.client}</div>}
+          </Field>
+          <Field label="Conducteur de travaux (optionnel)">
+            <input className="bati-input" maxLength={120} value={form.manager}
+                   onChange={e => update('manager', e.target.value)}/>
+          </Field>
+        </div>
+        <Field label="Adresse">
+          <input className="bati-input" maxLength={200} value={form.address}
+                 onChange={e => update('address', e.target.value)} aria-invalid={!!errors.address}/>
+          {errors.address && <div className="text-[11px] text-red-700 mt-1">{errors.address}</div>}
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Date de début">
+            <input type="date" className="bati-input" value={form.dateStart}
+                   onChange={e => update('dateStart', e.target.value)} aria-invalid={!!errors.dateStart}/>
+            {errors.dateStart && <div className="text-[11px] text-red-700 mt-1">{errors.dateStart}</div>}
+          </Field>
+          <Field label="Date de fin prévue">
+            <input type="date" className="bati-input" value={form.dateEndPrev}
+                   onChange={e => update('dateEndPrev', e.target.value)} aria-invalid={!!errors.dateEndPrev}/>
+            {errors.dateEndPrev && <div className="text-[11px] text-red-700 mt-1">{errors.dateEndPrev}</div>}
+          </Field>
+        </div>
+        <Field label="Budget main d'œuvre (DH)">
+          <input type="number" className="bati-input" min="1" step="any" value={form.budgetMO}
+                 onChange={e => update('budgetMO', e.target.value)} aria-invalid={!!errors.budgetMO}/>
+          {errors.budgetMO && <div className="text-[11px] text-red-700 mt-1">{errors.budgetMO}</div>}
+        </Field>
+        <div className="flex justify-end gap-2 pt-2">
+          <Btn onClick={onClose}>Annuler</Btn>
+          <Btn variant="primary" onClick={submit}>{isEdit ? 'Enregistrer' : 'Créer le chantier'}</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Small modal to bump the budget on an existing chantier.
+function BudgetBumpModal({ chantier, onClose }) {
+  const [delta, setDelta] = useExState('');
+  const [err, setErr] = useExState(null);
+  const submittedRef = useExRef(false);
+
+  function submit() {
+    if (submittedRef.current) return;
+    const n = Number(delta);
+    if (!isFinite(n) || n <= 0) { setErr('Montant invalide (> 0).'); return; }
+    submittedRef.current = true;
+    const idx = CHANTIERS.findIndex(x => x.id === chantier.id);
+    if (idx >= 0) {
+      CHANTIERS[idx] = { ...CHANTIERS[idx], budgetMO: (CHANTIERS[idx].budgetMO || 0) + n };
+      const userChantiers = (window.__BATI_USER_DATA && window.__BATI_USER_DATA.chantiers) || CHANTIERS;
+      const uIdx = userChantiers.findIndex(x => x.id === chantier.id);
+      if (uIdx >= 0) userChantiers[uIdx] = CHANTIERS[idx];
+      if (window.__BATI_PERSIST_PATCH) window.__BATI_PERSIST_PATCH({ chantiers: CHANTIERS.slice() });
+    }
+    onClose();
+  }
+
+  return (
+    <Modal title={`Ajouter du budget · ${chantier.name}`} onClose={onClose}>
+      <div className="space-y-3">
+        <div className="text-xs text-stone-500">
+          Budget actuel : <strong className="text-stone-900 tabular-nums">{formatMADCompact(chantier.budgetMO || 0)}</strong>
+        </div>
+        <Field label="Montant à ajouter (DH)">
+          <input type="number" className="bati-input" min="1" step="any" autoFocus
+                 value={delta} onChange={e => { setDelta(e.target.value); if (err) setErr(null); }}/>
+          {err && <div className="text-[11px] text-red-700 mt-1">{err}</div>}
+        </Field>
+        <div className="flex justify-end gap-2 pt-2">
+          <Btn onClick={onClose}>Annuler</Btn>
+          <Btn variant="primary" onClick={submit}>Ajouter au budget</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Edit-worker modal — mirrors AddWorkerForm but updates an existing OUVRIER.
+function EditWorkerModal({ worker, onClose }) {
+  const [nom, setNom] = useExState(worker.nom || '');
+  const [phone, setPhone] = useExState(worker.phone || '');
+  const [role, setRole] = useExState(worker.role || ROLES[0]);
+  const [tarif, setTarif] = useExState(String(worker.tarif || ''));
+  const [cin, setCin] = useExState(worker.cin || '');
+  const [dateEmbauche, setDateEmbauche] = useExState(worker.dateEmbauche || '');
+  const [errors, setErrors] = useExState({});
+  const submittedRef = useExRef(false);
+
+  function submit() {
+    if (submittedRef.current) return;
+    const errs = {};
+    if (!nom.trim()) errs.nom = 'Nom obligatoire.';
+    else if (nom.trim().length > 120) errs.nom = 'Maximum 120 caractères.';
+    if (!phone.trim()) errs.phone = 'Téléphone obligatoire.';
+    const tarifNum = Number(tarif);
+    if (tarif === '' || !isFinite(tarifNum) || tarifNum <= 0) errs.tarif = 'Tarif journalier > 0.';
+    else if (tarifNum > 100000) errs.tarif = 'Tarif déraisonnable.';
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+    submittedRef.current = true;
+
+    const idx = OUVRIERS.findIndex(x => x.id === worker.id);
+    if (idx >= 0) {
+      OUVRIERS[idx] = {
+        ...OUVRIERS[idx],
+        nom: nom.trim(),
+        phone: phone.trim(),
+        role,
+        tarif: tarifNum,
+        cin: cin.trim(),
+        dateEmbauche: dateEmbauche || OUVRIERS[idx].dateEmbauche,
+      };
+      if (window.__BATI_PERSIST_PATCH) window.__BATI_PERSIST_PATCH({ ouvriers: OUVRIERS.slice() });
+    }
+    onClose();
+  }
+
+  return (
+    <Modal title="Modifier l'ouvrier" onClose={onClose}>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Nom complet">
+            <input className="bati-input" maxLength={120} value={nom}
+                   onChange={e => { setNom(e.target.value); if (errors.nom) setErrors({ ...errors, nom: undefined }); }}/>
+            {errors.nom && <div className="text-[11px] text-red-700 mt-1">{errors.nom}</div>}
+          </Field>
+          <Field label="Téléphone">
+            <input className="bati-input" maxLength={40} value={phone}
+                   onChange={e => { setPhone(e.target.value); if (errors.phone) setErrors({ ...errors, phone: undefined }); }}/>
+            {errors.phone && <div className="text-[11px] text-red-700 mt-1">{errors.phone}</div>}
+          </Field>
+          <Field label="Rôle">
+            <select className="bati-input" value={role} onChange={e => setRole(e.target.value)}>
+              {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </Field>
+          <Field label="Tarif journalier (DH)">
+            <input type="number" className="bati-input" min="1" step="any" value={tarif}
+                   onChange={e => { setTarif(e.target.value); if (errors.tarif) setErrors({ ...errors, tarif: undefined }); }}/>
+            {errors.tarif && <div className="text-[11px] text-red-700 mt-1">{errors.tarif}</div>}
+          </Field>
+          <Field label="CIN (optionnel)">
+            <input className="bati-input" maxLength={40} value={cin} onChange={e => setCin(e.target.value)}/>
+          </Field>
+          <Field label="Date d'embauche">
+            <input type="date" className="bati-input" value={dateEmbauche} onChange={e => setDateEmbauche(e.target.value)}/>
+          </Field>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Btn onClick={onClose}>Annuler</Btn>
+          <Btn variant="primary" onClick={submit}>Enregistrer</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
 
 // ─── CHANTIERS ────────────────────────────────────────────────
 function Chantiers({ ctx, openId, setOpenId }) {
   if (openId) return <ChantierDetail ctx={ctx} id={openId} onBack={() => setOpenId(null)}/>;
+  const [showAdd, setShowAdd] = useExState(false);
 
   const spent = useExMemo(() => {
     const m = {};
@@ -19,8 +249,9 @@ function Chantiers({ ctx, openId, setOpenId }) {
 
   return (
     <div>
-      <PageHeader title="Chantiers" subtitle={`${CHANTIERS.length} chantiers actifs`}
-                  right={<Btn variant="primary" icon={<Icons.Plus size={14}/>}>Nouveau chantier</Btn>}/>
+      <PageHeader title="Chantiers" subtitle={`${CHANTIERS.length} chantier${CHANTIERS.length > 1 ? 's' : ''} actif${CHANTIERS.length > 1 ? 's' : ''}`}
+                  right={<Btn variant="primary" icon={<Icons.Plus size={14}/>} onClick={() => setShowAdd(true)}>Nouveau chantier</Btn>}/>
+      {showAdd && <ChantierFormModal onClose={() => setShowAdd(false)}/>}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {CHANTIERS.map(c => {
           const sp = spent[c.id] || 0;
@@ -74,6 +305,8 @@ function Chantiers({ ctx, openId, setOpenId }) {
 
 function ChantierDetail({ ctx, id, onBack }) {
   const c = CHANTIERS.find(x => x.id === id);
+  const [showEdit, setShowEdit] = useExState(false);
+  const [showBudget, setShowBudget] = useExState(false);
   const data = useExMemo(() => {
     // per-quinzaine breakdown
     const byQ = {};
@@ -125,9 +358,11 @@ function ChantierDetail({ ctx, id, onBack }) {
               <div className="text-sm text-stone-500 mt-0.5">{c.client} · {c.address}</div>
             </div>
             <div className="flex gap-2">
-              <Btn icon={<Icons.Edit size={13}/>}>Modifier</Btn>
-              <Btn variant="primary" icon={<Icons.Plus size={13}/>}>Ajouter du budget</Btn>
+              <Btn icon={<Icons.Edit size={13}/>} onClick={() => setShowEdit(true)}>Modifier</Btn>
+              <Btn variant="primary" icon={<Icons.Plus size={13}/>} onClick={() => setShowBudget(true)}>Ajouter du budget</Btn>
             </div>
+            {showEdit && <ChantierFormModal initial={c} onClose={() => setShowEdit(false)}/>}
+            {showBudget && <BudgetBumpModal chantier={c} onClose={() => setShowBudget(false)}/>}
           </div>
 
           <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -348,17 +583,90 @@ function Ouvriers({ ctx, openId, setOpenId }) {
 }
 
 function AddWorkerForm({ onClose }) {
+  const { useState, useRef } = React;
+  const [nom, setNom] = useState('');
+  const [phone, setPhone] = useState('');
+  const [role, setRole] = useState(ROLES[0]);
+  const [tarif, setTarif] = useState('');
+  const [cin, setCin] = useState('');
+  const [dateEmbauche, setDateEmbauche] = useState('');
+  const [errors, setErrors] = useState({});
+  const submittedRef = useRef(false);
+
+  function submit() {
+    if (submittedRef.current) return;
+    const errs = {};
+    if (!nom.trim()) errs.nom = 'Nom obligatoire.';
+    else if (nom.trim().length > 120) errs.nom = 'Maximum 120 caractères.';
+    if (!phone.trim()) errs.phone = 'Téléphone obligatoire.';
+    const tarifNum = Number(tarif);
+    if (tarif === '' || !isFinite(tarifNum) || tarifNum <= 0) errs.tarif = 'Tarif journalier > 0.';
+    else if (tarifNum > 100000) errs.tarif = 'Tarif déraisonnable.';
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+
+    submittedRef.current = true;
+    const newWorker = {
+      id: 'w-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+      nom: nom.trim(),
+      role,
+      tarif: tarifNum,
+      phone: phone.trim(),
+      cin: cin.trim() || '',
+      dateEmbauche: dateEmbauche || new Date().toISOString().slice(0, 10),
+      actif: true,
+      hue: Math.floor(Math.random() * 360),
+    };
+
+    // Hot-update the in-memory list so the Ouvriers table reflects the new row
+    // immediately after the modal closes.
+    try { if (typeof OUVRIERS !== 'undefined' && Array.isArray(OUVRIERS)) OUVRIERS.push(newWorker); } catch (_) {}
+
+    // Persist to Supabase via the standard slice patcher.
+    if (window.__BATI_PERSIST_PATCH) {
+      try { window.__BATI_PERSIST_PATCH({ ouvriers: (typeof OUVRIERS !== 'undefined' && Array.isArray(OUVRIERS)) ? OUVRIERS.slice() : [newWorker] }); } catch (_) {}
+    }
+
+    onClose();
+  }
+
+  function update(setter, field) {
+    return (e) => {
+      setter(e.target.value);
+      if (errors[field]) setErrors(prev => { const n = { ...prev }; delete n[field]; return n; });
+    };
+  }
+
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Nom complet"><input className="bati-input" placeholder="Mohamed Naciri"/></Field>
-        <Field label="Téléphone"><input className="bati-input" placeholder="06XX XX XX XX"/></Field>
-        <Field label="Rôle">
-          <select className="bati-input">{ROLES.map(r => <option key={r}>{r}</option>)}</select>
+        <Field label="Nom complet">
+          <input className="bati-input" placeholder="Mohamed Naciri" maxLength={120}
+                 value={nom} onChange={update(setNom, 'nom')} aria-invalid={!!errors.nom}/>
+          {errors.nom && <div className="text-[11px] text-red-700 mt-1">{errors.nom}</div>}
         </Field>
-        <Field label="Tarif journalier (DH)"><input type="number" className="bati-input" placeholder="250"/></Field>
-        <Field label="CIN (optionnel)"><input className="bati-input" placeholder="BK 145872"/></Field>
-        <Field label="Date d'embauche"><input type="date" className="bati-input"/></Field>
+        <Field label="Téléphone">
+          <input className="bati-input" placeholder="06XX XX XX XX" maxLength={40}
+                 value={phone} onChange={update(setPhone, 'phone')} aria-invalid={!!errors.phone}/>
+          {errors.phone && <div className="text-[11px] text-red-700 mt-1">{errors.phone}</div>}
+        </Field>
+        <Field label="Rôle">
+          <select className="bati-input" value={role} onChange={e => setRole(e.target.value)}>
+            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </Field>
+        <Field label="Tarif journalier (DH)">
+          <input type="number" className="bati-input" placeholder="250" min="1" step="any"
+                 value={tarif} onChange={update(setTarif, 'tarif')} aria-invalid={!!errors.tarif}/>
+          {errors.tarif && <div className="text-[11px] text-red-700 mt-1">{errors.tarif}</div>}
+        </Field>
+        <Field label="CIN (optionnel)">
+          <input className="bati-input" placeholder="BK 145872" maxLength={40}
+                 value={cin} onChange={e => setCin(e.target.value)}/>
+        </Field>
+        <Field label="Date d'embauche">
+          <input type="date" className="bati-input"
+                 value={dateEmbauche} onChange={e => setDateEmbauche(e.target.value)}/>
+        </Field>
       </div>
       <Field label="Photo">
         <div className="border-2 border-dashed rounded-lg p-4 text-center text-xs text-stone-500" style={{ borderColor:'#E8E2D8' }}>
@@ -367,7 +675,7 @@ function AddWorkerForm({ onClose }) {
       </Field>
       <div className="flex justify-end gap-2 pt-2">
         <Btn onClick={onClose}>Annuler</Btn>
-        <Btn variant="primary" onClick={onClose}>Ajouter</Btn>
+        <Btn variant="primary" onClick={submit}>Ajouter</Btn>
       </div>
     </div>
   );
@@ -384,6 +692,7 @@ function Field({ label, children }) {
 
 function OuvrierDetail({ ctx, id, onBack }) {
   const w = OUVRIERS.find(x => x.id === id);
+  const [showEdit, setShowEdit] = useExState(false);
   const cq = currentQuinzaine();
   const { start, end } = quinzaineRange(cq.year, cq.monthIdx, cq.half);
   const days = [];
@@ -430,9 +739,11 @@ function OuvrierDetail({ ctx, id, onBack }) {
               </div>
             </div>
           </div>
-          <Btn icon={<Icons.Edit size={13}/>}>Modifier</Btn>
+          <Btn icon={<Icons.Edit size={13}/>} onClick={() => setShowEdit(true)}>Modifier</Btn>
         </div>
       </Card>
+
+      {showEdit && <EditWorkerModal worker={w} onClose={() => setShowEdit(false)}/>}
 
       {primesRecues.length > 0 && (
         <Card className="p-4">
@@ -454,19 +765,47 @@ function OuvrierDetail({ ctx, id, onBack }) {
 
 // ─── PARAMÈTRES ───────────────────────────────────────────────
 function Parametres({ ctx }) {
+  const [companyForm, setCompanyForm] = useExState({
+    name: COMPANY.name || '',
+    ice: COMPANY.ice || '',
+    rc: COMPANY.rc || '',
+    if: COMPANY.if || '',
+    address: COMPANY.address || '',
+    phone: COMPANY.phone || '',
+  });
+  const [savedAt, setSavedAt] = useExState(null);
+  const dirty = useExMemo(() =>
+    Object.keys(companyForm).some(k => (companyForm[k] || '') !== (COMPANY[k] || '')),
+    [companyForm]
+  );
+  function updateCo(field, value) { setCompanyForm(prev => ({ ...prev, [field]: value })); }
+  function saveCompany() {
+    // Mutate the existing COMPANY object in place so other modules reading it
+    // see the new values, then persist the slice.
+    Object.assign(COMPANY, companyForm);
+    if (window.__BATI_PERSIST_PATCH) window.__BATI_PERSIST_PATCH({ company: { ...COMPANY } });
+    setSavedAt(Date.now());
+  }
+
   return (
     <div className="space-y-6 max-w-5xl">
       <PageHeader title="Paramètres" subtitle="Société, abonnement, équipe et préférences."/>
 
       <Card className="p-5">
-        <h2 className="font-bold mb-4">Informations de l'entreprise</h2>
+        <div className="flex items-start justify-between mb-4">
+          <h2 className="font-bold">Informations de l'entreprise</h2>
+          <div className="flex items-center gap-3">
+            {savedAt && !dirty && <span className="text-[11px] text-green-700">Enregistré</span>}
+            <Btn variant="primary" size="sm" onClick={saveCompany} disabled={!dirty}>Enregistrer</Btn>
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Raison sociale"><input className="bati-input" defaultValue={COMPANY.name}/></Field>
-          <Field label="ICE"><input className="bati-input" defaultValue={COMPANY.ice}/></Field>
-          <Field label="Registre de commerce (RC)"><input className="bati-input" defaultValue={COMPANY.rc}/></Field>
-          <Field label="Identifiant fiscal (IF)"><input className="bati-input" defaultValue={COMPANY.if}/></Field>
-          <Field label="Adresse"><input className="bati-input" defaultValue={COMPANY.address}/></Field>
-          <Field label="Téléphone"><input className="bati-input" defaultValue={COMPANY.phone}/></Field>
+          <Field label="Raison sociale"><input className="bati-input" maxLength={120} value={companyForm.name} onChange={e => updateCo('name', e.target.value)}/></Field>
+          <Field label="ICE"><input className="bati-input" maxLength={32} value={companyForm.ice} onChange={e => updateCo('ice', e.target.value)}/></Field>
+          <Field label="Registre de commerce (RC)"><input className="bati-input" maxLength={32} value={companyForm.rc} onChange={e => updateCo('rc', e.target.value)}/></Field>
+          <Field label="Identifiant fiscal (IF)"><input className="bati-input" maxLength={32} value={companyForm.if} onChange={e => updateCo('if', e.target.value)}/></Field>
+          <Field label="Adresse"><input className="bati-input" maxLength={200} value={companyForm.address} onChange={e => updateCo('address', e.target.value)}/></Field>
+          <Field label="Téléphone"><input className="bati-input" maxLength={40} value={companyForm.phone} onChange={e => updateCo('phone', e.target.value)}/></Field>
         </div>
         <div className="mt-4">
           <Field label="Logo">
@@ -474,7 +813,7 @@ function Parametres({ ctx }) {
               <div className="w-16 h-16 rounded-lg flex items-center justify-center text-white border-2 border-dashed" style={{ background:'#0E5460', borderColor:'#E8E2D8' }}>
                 <Icons.Logo size={28}/>
               </div>
-              <Btn size="sm">Téléverser un logo</Btn>
+              <Btn size="sm" disabled title="Bientôt disponible (nécessite Supabase Storage)">Téléverser un logo</Btn>
             </div>
           </Field>
         </div>

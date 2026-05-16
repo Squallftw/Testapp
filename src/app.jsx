@@ -45,8 +45,6 @@ function App() {
   useAppEff(() => { __applyRedirect(decision); }, [decision]);
 
   function __onChantierCreated(chantier) {
-    // Hot-update the in-memory CHANTIERS list so the main shell sees the new
-    // chantier without a page reload.
     try { if (typeof CHANTIERS !== 'undefined' && Array.isArray(CHANTIERS)) CHANTIERS.push(chantier); } catch (_) {}
     const after = __gate.decideRoute({
       session: __currentSession(),
@@ -55,13 +53,10 @@ function App() {
       justCreatedChantier: true,
     });
     __applyRedirect(after);
-    // Schedule a re-decide on the next tick, after the hashchange has fired.
     setTimeout(() => setDecision(__decide()), 0);
   }
 
   const [page, setPage] = useAppState(() => (decision && decision.page) || 'dashboard');
-
-  // Keep `page` synced with gate decision (covers hashchange + cross-tab updates).
   useAppEff(() => {
     if (decision && decision.allow && decision.page && decision.page !== page) {
       setPage(decision.page);
