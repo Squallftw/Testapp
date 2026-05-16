@@ -60,6 +60,11 @@ function Consommables({ ctx }) {
   const [consumption, setConsumption] = useCnState(() => JSON.parse(JSON.stringify(window.CONSUMPTION_SEED || [])));
   const [transfers, setTransfers] = useCnState(() => JSON.parse(JSON.stringify(window.TRANSFERS_SEED || [])));
   const [audit, setAudit] = useCnState(() => JSON.parse(JSON.stringify(window.CONSOMM_AUDIT_SEED || [])));
+  const [suppliers, setSuppliers] = useCnState(() => JSON.parse(JSON.stringify(window.SUPPLIERS || [])));
+
+  // Mirror suppliers back to the global so existing read paths in the forms /
+  // tabs (which still reference `SUPPLIERS` lexically) stay in sync.
+  React.useEffect(() => { window.SUPPLIERS = suppliers; }, [suppliers]);
 
   // Persist consommables slices
   React.useEffect(() => {
@@ -70,9 +75,10 @@ function Consommables({ ctx }) {
         consumption,
         transfers,
         consommAudit: audit,
+        suppliers,
       });
     }
-  }, [items, purchases, consumption, transfers, audit]);
+  }, [items, purchases, consumption, transfers, audit, suppliers]);
 
   // Active filters (shared across tabs that need them)
   const [filterChantier, setFilterChantier] = useCnState('all');
@@ -125,25 +131,38 @@ function Consommables({ ctx }) {
     const it = getItem(items, t.itemId);
     logAudit('created', 'transfer', `Transfert ${t.qty} ${it?.unit} ${it?.name}: ${getLocation(t.from)?.name} → ${getLocation(t.to)?.name}`);
   }
+  function saveSupplier(s, isNew) {
+    setSuppliers(prev => {
+      if (isNew) return [...prev, { ...s, id: 's-' + Date.now().toString(36) }];
+      return prev.map(x => x.id === s.id ? s : x);
+    });
+    logAudit(isNew ? 'created' : 'edited', 'supplier', `${isNew ? 'Fournisseur créé' : 'Fournisseur modifié'}: ${s.name}`);
+  }
+  function deleteSupplier(id) {
+    const s = suppliers.find(x => x.id === id);
+    setSuppliers(prev => prev.filter(x => x.id !== id));
+    logAudit('deleted', 'supplier', `Fournisseur supprimé: ${s?.name}`);
+  }
 
   // Modal state — opening any "Add" CTA from anywhere
   const [adding, setAdding] = useCnState(null); // 'purchase' | 'consumption' | 'item' | 'transfer'
   const [editing, setEditing] = useCnState(null); // { kind, entity }
 
   const tabs = [
-    { id: 'apercu',       label: 'Aperçu',      icon: 'Dashboard' },
-    { id: 'catalogue',    label: 'Catalogue',   icon: 'Coins' },
-    { id: 'achats',       label: 'Achats',      icon: 'Plus' },
-    { id: 'consommation', label: 'Consommation',icon: 'Minus' },
-    { id: 'stocks',       label: 'Stocks',      icon: 'Building' },
-    { id: 'analyses',     label: 'Analyses',    icon: 'TrendUp' }
+    { id: 'apercu',        label: 'Aperçu',       icon: 'Dashboard' },
+    { id: 'catalogue',     label: 'Catalogue',    icon: 'Coins' },
+    { id: 'achats',        label: 'Achats',       icon: 'Plus' },
+    { id: 'consommation',  label: 'Consommation', icon: 'Minus' },
+    { id: 'stocks',        label: 'Stocks',       icon: 'Building' },
+    { id: 'fournisseurs',  label: 'Fournisseurs', icon: 'Bank' },
+    { id: 'analyses',      label: 'Analyses',     icon: 'TrendUp' }
   ];
 
   const sharedCtx = {
-    items, purchases, consumption, transfers, audit,
+    items, purchases, consumption, transfers, audit, suppliers,
     filterChantier, setFilterChantier, filterCat, setFilterCat,
     savePurchase, deletePurchase, saveConsumption, deleteConsumption,
-    saveItem, deleteItem, saveTransfer,
+    saveItem, deleteItem, saveTransfer, saveSupplier, deleteSupplier,
     onAdd: (kind) => setAdding(kind),
     onEdit: (kind, entity) => setEditing({ kind, entity })
   };
@@ -182,6 +201,7 @@ function Consommables({ ctx }) {
       {tab === 'achats'       && <AchatsTab {...sharedCtx}/>}
       {tab === 'consommation' && <ConsommationTab {...sharedCtx}/>}
       {tab === 'stocks'       && <StocksTab {...sharedCtx}/>}
+      {tab === 'fournisseurs' && <FournisseursTab {...sharedCtx}/>}
       {tab === 'analyses'     && <AnalysesTab {...sharedCtx}/>}
 
       {/* Add / Edit modals */}
@@ -195,6 +215,8 @@ function Consommables({ ctx }) {
       {adding === 'transfer' && <TransferForm items={items} purchases={purchases} consumption={consumption} transfers={transfers}
                                                onClose={() => setAdding(null)}
                                                onSave={(t) => { saveTransfer(t); setAdding(null); }}/>}
+      {adding === 'supplier' && <SupplierForm onClose={() => setAdding(null)}
+                                               onSave={(s) => { saveSupplier(s, true); setAdding(null); }}/>}
       {editing?.kind === 'item' && <ItemForm items={items} item={editing.entity} onClose={() => setEditing(null)}
                                               onSave={(it) => { saveItem(it, false); setEditing(null); }}
                                               onDelete={() => { deleteItem(editing.entity.id); setEditing(null); }}/>}
@@ -205,6 +227,9 @@ function Consommables({ ctx }) {
                                                             entry={editing.entity} onClose={() => setEditing(null)}
                                                             onSave={(u) => { saveConsumption(u, false); setEditing(null); }}
                                                             onDelete={() => { deleteConsumption(editing.entity.id); setEditing(null); }}/>}
+      {editing?.kind === 'supplier' && <SupplierForm supplier={editing.entity} onClose={() => setEditing(null)}
+                                                      onSave={(s) => { saveSupplier(s, false); setEditing(null); }}
+                                                      onDelete={() => { deleteSupplier(editing.entity.id); setEditing(null); }}/>}
     </div>
   );
 }

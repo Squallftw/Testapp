@@ -651,8 +651,93 @@ function PriceChart({ items }) {
   );
 }
 
+// ─── Fournisseurs tab ─────────────────────────────────────────
+function FournisseursTab({ suppliers, items, purchases, onAdd, onEdit }) {
+  const [search, setSearch] = useTbState('');
+  const filtered = suppliers.filter(s =>
+    !search || `${s.name} ${s.type || ''} ${s.city || ''}`.toLowerCase().includes(search.toLowerCase())
+  );
+
+  // Aggregate per-supplier usage: how many items reference it, total achats value.
+  const stats = {};
+  suppliers.forEach(s => { stats[s.id] = { itemCount: 0, purchaseCount: 0, purchaseTotal: 0 }; });
+  items.forEach(it => { if (stats[it.supplier]) stats[it.supplier].itemCount += 1; });
+  purchases.forEach(p => {
+    if (!stats[p.supplier]) return;
+    stats[p.supplier].purchaseCount += 1;
+    stats[p.supplier].purchaseTotal += p.items.reduce((a, li) => a + li.qty * li.unitPrice, 0);
+  });
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="relative">
+          <Icons.Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400"/>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+                 placeholder="Rechercher un fournisseur…"
+                 className="bg-white border border-stone-200 rounded-lg pl-7 pr-3 py-1.5 text-sm w-64 focus:outline-none focus:border-stone-400"/>
+        </div>
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-xs text-stone-500"><b className="text-stone-900">{filtered.length}</b> fournisseur{filtered.length>1?'s':''}</span>
+          <Btn variant="primary" icon={<Icons.Plus size={13}/>} onClick={() => onAdd('supplier')}>Ajouter</Btn>
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <Card className="p-8">
+          <EmptyState icon={<Icons.Building size={20}/>}
+                      title={suppliers.length === 0 ? "Aucun fournisseur enregistré" : "Aucun résultat"}
+                      hint={suppliers.length === 0
+                        ? "Créez votre premier fournisseur pour pouvoir saisir des articles et des achats."
+                        : "Ajustez votre recherche."}/>
+        </Card>
+      ) : (
+        <Card className="overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[10px] uppercase tracking-wider text-stone-500 font-semibold" style={{ background:'#FAF7F1' }}>
+                <th className="px-4 py-2.5">Raison sociale</th>
+                <th className="px-3 py-2.5">Type</th>
+                <th className="px-3 py-2.5">Ville</th>
+                <th className="px-3 py-2.5">Téléphone</th>
+                <th className="px-3 py-2.5 text-right">Articles</th>
+                <th className="px-3 py-2.5 text-right">Achats</th>
+                <th className="px-3 py-2.5 text-right">Total achats</th>
+                <th className="px-3 py-2.5"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(s => {
+                const st = stats[s.id] || { itemCount: 0, purchaseCount: 0, purchaseTotal: 0 };
+                return (
+                  <tr key={s.id} className="border-t hover:bg-stone-50/60" style={{ borderColor:'#F0EAE0' }}>
+                    <td className="px-4 py-2.5 font-semibold">{s.name}</td>
+                    <td className="px-3 py-2.5 text-stone-600">{s.type || '—'}</td>
+                    <td className="px-3 py-2.5 text-stone-600">{s.city || '—'}</td>
+                    <td className="px-3 py-2.5 text-stone-600 tabular-nums">{s.phone || '—'}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{st.itemCount}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{st.purchaseCount}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-semibold">{formatMADCompact(st.purchaseTotal)}</td>
+                    <td className="px-3 py-2.5 text-right">
+                      <button onClick={() => onEdit('supplier', s)}
+                              className="text-stone-500 hover:text-stone-900 inline-flex items-center gap-1 text-xs font-semibold">
+                        <Icons.Edit size={12}/> Modifier
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 window.CatalogueTab = CatalogueTab;
 window.AchatsTab = AchatsTab;
 window.ConsommationTab = ConsommationTab;
 window.StocksTab = StocksTab;
 window.AnalysesTab = AnalysesTab;
+window.FournisseursTab = FournisseursTab;

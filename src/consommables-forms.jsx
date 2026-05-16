@@ -13,13 +13,77 @@ function CnFormField({ label, hint, children }) {
   );
 }
 
+// ─── SupplierForm ─────────────────────────────────────────────
+function SupplierForm({ supplier, onSave, onDelete, onClose }) {
+  const [name, setName] = useFmState(supplier?.name || '');
+  const [type, setType] = useFmState(supplier?.type || '');
+  const [city, setCity] = useFmState(supplier?.city || '');
+  const [phone, setPhone] = useFmState(supplier?.phone || '');
+
+  function save() {
+    if (!name.trim()) return;
+    onSave({
+      ...(supplier || {}),
+      name: name.trim(),
+      type: type.trim(),
+      city: city.trim(),
+      phone: phone.trim(),
+    });
+  }
+
+  return (
+    <Modal title={supplier ? 'Modifier le fournisseur' : 'Nouveau fournisseur'} onClose={onClose} width="max-w-lg">
+      <div className="space-y-4">
+        <CnFormField label="Raison sociale">
+          <input autoFocus className="bati-input" maxLength={120} value={name}
+                 onChange={e => setName(e.target.value)} placeholder="ex. Lafarge Holcim"/>
+        </CnFormField>
+        <div className="grid grid-cols-2 gap-3">
+          <CnFormField label="Type / spécialité">
+            <input className="bati-input" maxLength={60} value={type}
+                   onChange={e => setType(e.target.value)} placeholder="ex. Cimentier, Distributeur…"/>
+          </CnFormField>
+          <CnFormField label="Ville">
+            <input className="bati-input" maxLength={60} value={city}
+                   onChange={e => setCity(e.target.value)} placeholder="ex. Casablanca"/>
+          </CnFormField>
+        </div>
+        <CnFormField label="Téléphone">
+          <input className="bati-input" maxLength={40} value={phone}
+                 onChange={e => setPhone(e.target.value)} placeholder="+212 522 ..."/>
+        </CnFormField>
+        <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor:'#F0EAE0' }}>
+          {supplier && onDelete ? (
+            <button onClick={onDelete} className="text-xs font-semibold text-red-600 hover:text-red-700 inline-flex items-center gap-1">
+              <Icons.Trash size={12}/> Supprimer
+            </button>
+          ) : <span/>}
+          <div className="flex gap-2">
+            <Btn onClick={onClose}>Annuler</Btn>
+            <Btn variant="primary" onClick={save} disabled={!name.trim()}>{supplier ? 'Enregistrer' : 'Créer'}</Btn>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Tiny inline helper when no suppliers exist yet — used inside ItemForm / PurchaseForm.
+function EmptySupplierHint() {
+  return (
+    <div className="text-xs p-3 rounded-lg" style={{ background:'#FBE3DC', color:'#7A2814', border:'1px solid #ECC2B3' }}>
+      Aucun fournisseur enregistré. Ouvrez l'onglet <b>Fournisseurs</b> pour en créer un, puis revenez ici.
+    </div>
+  );
+}
+
 // ─── ItemForm ─────────────────────────────────────────────────
 function ItemForm({ item, items, onSave, onDelete, onClose }) {
   const [name, setName] = useFmState(item?.name || '');
   const [cat, setCat] = useFmState(item?.cat || 'maconnerie');
   const [unit, setUnit] = useFmState(item?.unit || 'pièce');
   const [price, setPrice] = useFmState(item?.price ?? '');
-  const [supplier, setSupplier] = useFmState(item?.supplier || SUPPLIERS[0].id);
+  const [supplier, setSupplier] = useFmState(item?.supplier || SUPPLIERS[0]?.id || '');
   const [threshold, setThreshold] = useFmState(item?.threshold ?? 0);
   const [hasExpiry, setHasExpiry] = useFmState(!!item?.hasExpiry);
   const [notes, setNotes] = useFmState(item?.notes || '');
@@ -63,9 +127,11 @@ function ItemForm({ item, items, onSave, onDelete, onClose }) {
           </CnFormField>
         </div>
         <CnFormField label="Fournisseur principal">
-          <select className="bati-input" value={supplier} onChange={e => setSupplier(e.target.value)}>
-            {SUPPLIERS.map(s => <option key={s.id} value={s.id}>{s.name} — {s.city}</option>)}
-          </select>
+          {SUPPLIERS.length === 0 ? <EmptySupplierHint/> : (
+            <select className="bati-input" value={supplier} onChange={e => setSupplier(e.target.value)}>
+              {SUPPLIERS.map(s => <option key={s.id} value={s.id}>{s.name}{s.city ? ` — ${s.city}` : ''}</option>)}
+            </select>
+          )}
         </CnFormField>
         <label className="inline-flex items-center gap-2 text-sm">
           <input type="checkbox" checked={hasExpiry} onChange={e => setHasExpiry(e.target.checked)} className="accent-stone-700"/>
@@ -93,11 +159,11 @@ function ItemForm({ item, items, onSave, onDelete, onClose }) {
 // ─── PurchaseForm ─────────────────────────────────────────────
 function PurchaseForm({ purchase, items, onSave, onDelete, onClose }) {
   const [date, setDate] = useFmState(purchase?.date || new Date().toISOString().slice(0,10));
-  const [supplier, setSupplier] = useFmState(purchase?.supplier || SUPPLIERS[0].id);
+  const [supplier, setSupplier] = useFmState(purchase?.supplier || SUPPLIERS[0]?.id || '');
   const [location, setLocation] = useFmState(purchase?.location || 'depot');
   const [invoice, setInvoice] = useFmState(purchase?.invoice || '');
   const [payment, setPayment] = useFmState(purchase?.payment || 'paid');
-  const [lines, setLines] = useFmState(purchase?.items || [{ itemId: items[0]?.id, qty: 1, unitPrice: items[0]?.price || 0 }]);
+  const [lines, setLines] = useFmState(purchase?.items || (items[0] ? [{ itemId: items[0].id, qty: 1, unitPrice: items[0].price || 0 }] : []));
 
   function updateLine(i, patch) {
     setLines(prev => prev.map((l, idx) => idx === i ? { ...l, ...patch } : l));
@@ -130,9 +196,11 @@ function PurchaseForm({ purchase, items, onSave, onDelete, onClose }) {
             <input type="date" className="bati-input" value={date} onChange={e => setDate(e.target.value)}/>
           </CnFormField>
           <CnFormField label="Fournisseur">
-            <select className="bati-input" value={supplier} onChange={e => setSupplier(e.target.value)}>
-              {SUPPLIERS.map(s => <option key={s.id} value={s.id}>{s.name} — {s.city}</option>)}
-            </select>
+            {SUPPLIERS.length === 0 ? <EmptySupplierHint/> : (
+              <select className="bati-input" value={supplier} onChange={e => setSupplier(e.target.value)}>
+                {SUPPLIERS.map(s => <option key={s.id} value={s.id}>{s.name}{s.city ? ` — ${s.city}` : ''}</option>)}
+              </select>
+            )}
           </CnFormField>
           <CnFormField label="Destination">
             <select className="bati-input" value={location} onChange={e => setLocation(e.target.value)}>
@@ -428,6 +496,7 @@ function TransferForm({ items, purchases, consumption, transfers, onSave, onClos
   );
 }
 
+window.SupplierForm = SupplierForm;
 window.ItemForm = ItemForm;
 window.PurchaseForm = PurchaseForm;
 window.ConsumptionForm = ConsumptionForm;
