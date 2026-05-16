@@ -28,7 +28,8 @@ function PointageQuinzaine({ ctx, currentQ, onSwitchQ, onSwitchMois }) {
   const qkey = quinzaineKey(year, monthIdx, half);
   const qState = ctx.qStates[qkey]?.state || 'En cours';
 
-  const [filterChantier, setFilterChantier] = usePoState('all');
+  // Chantier scope is global (topbar switcher) — read from ctx.
+  const filterChantier = ctx.currentChantierId || 'all';
   const [filterRole, setFilterRole] = usePoState('all');
   const [search, setSearch] = usePoState('');
   const [popCell, setPopCell] = usePoState(null); // { workerId, day, anchor }
@@ -237,11 +238,7 @@ function PointageQuinzaine({ ctx, currentQ, onSwitchQ, onSwitchMois }) {
         <div className="h-6 w-px bg-stone-200"/>
 
         <div className="flex items-center gap-2 flex-wrap text-sm">
-          <select value={filterChantier} onChange={e => setFilterChantier(e.target.value)}
-                  className="bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-xs">
-            <option value="all">Tous les chantiers</option>
-            {CHANTIERS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          {/* Chantier filter is now global (topbar switcher) — no per-page <select>. */}
           <select value={filterRole} onChange={e => setFilterRole(e.target.value)}
                   className="bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-xs">
             <option value="all">Tous les rôles</option>

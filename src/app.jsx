@@ -46,6 +46,8 @@ function App() {
 
   function __onChantierCreated(chantier) {
     try { if (typeof CHANTIERS !== 'undefined' && Array.isArray(CHANTIERS)) CHANTIERS.push(chantier); } catch (_) {}
+    // Make the newly-created chantier the active one in the topbar switcher.
+    setCurrentChantierIdRef.current && setCurrentChantierIdRef.current(chantier.id);
     const after = __gate.decideRoute({
       session: __currentSession(),
       userState: window.__BATI_USER_DATA,
@@ -55,6 +57,9 @@ function App() {
     __applyRedirect(after);
     setTimeout(() => setDecision(__decide()), 0);
   }
+  // Ref so __onChantierCreated (defined above the currentChantierId useState
+  // declaration) can still reach the setter without violating hook order.
+  const setCurrentChantierIdRef = useAppRef(null);
 
   const [page, setPage] = useAppState(() => (decision && decision.page) || 'dashboard');
   useAppEff(() => {
@@ -68,6 +73,21 @@ function App() {
     setPage(targetPage);
     window.location.hash = '/' + targetPage;
   }
+
+  // ── Global current chantier (drives every scoped page in the app) ──────
+  // Init from persisted user state if available, otherwise from the first
+  // chantier in CHANTIERS (CHANTIERS is hydrated by data.jsx from the same
+  // blob, so this is consistent).
+  const [currentChantierId, setCurrentChantierId] = useAppState(() => {
+    const persisted = window.__BATI_USER_DATA && window.__BATI_USER_DATA.currentChantierId;
+    if (persisted && (typeof CHANTIERS === 'undefined' || CHANTIERS.find(c => c.id === persisted))) return persisted;
+    if (typeof CHANTIERS !== 'undefined' && CHANTIERS.length > 0) return CHANTIERS[0].id;
+    return null;
+  });
+  setCurrentChantierIdRef.current = setCurrentChantierId;
+  useAppEff(() => {
+    if (window.__BATI_PERSIST_PATCH) window.__BATI_PERSIST_PATCH({ currentChantierId });
+  }, [currentChantierId]);
 
   const [lang, setLang] = useAppState('FR');
   const [mobileMenu, setMobileMenu] = useAppState(false);
@@ -278,7 +298,9 @@ function App() {
     plans, setPlanForChantier, assignments, assignWorker, unassignWorker,
     updateCell, setQState: setQStateFn, openPayModal: openPayModalFn,
     openAdj: openAdjFn,
-    openWorker: (id) => { setOpenOuvrier(id); setPage('ouvriers'); }
+    openWorker: (id) => { setOpenOuvrier(id); setPage('ouvriers'); },
+    currentChantierId,
+    setCurrentChantier: setCurrentChantierId,
   };
 
   const isRTL = lang === 'AR';
@@ -292,7 +314,10 @@ function App() {
 
   return (
     <div className={`min-h-screen ${isRTL ? 'rtl' : 'ltr'}`} dir={isRTL ? 'rtl' : 'ltr'} style={{ background:'#FAF7F1' }}>
-      <TopBar lang={lang} setLang={setLang} onMenu={() => setMobileMenu(true)}/>
+      <TopBar lang={lang} setLang={setLang} onMenu={() => setMobileMenu(true)}
+              currentChantierId={currentChantierId}
+              onSwitchChantier={setCurrentChantierId}
+              onManageChantiers={() => __navigate('chantiers')}/>
       <div className="flex">
         <Sidebar current={page} onNav={(p) => { __navigate(p); setOpenChantier(null); setOpenOuvrier(null); }}
                  mobileOpen={mobileMenu} onMobileClose={() => setMobileMenu(false)}

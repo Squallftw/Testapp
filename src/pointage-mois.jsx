@@ -8,7 +8,8 @@ function PointageMois({ ctx, currentMonth, onSwitchMonth, onSwitchQuinzaine }) {
   for (let d = 1; d <= dim; d++) days.push(d);
   const q1End = 15;
 
-  const [filterChantier, setFilterChantier] = useMoState('all');
+  // Chantier scope is global (topbar switcher) — read from ctx.
+  const filterChantier = ctx.currentChantierId || 'all';
   const [hoverCell, setHoverCell] = useMoState(null);
   const [dayPanel, setDayPanel] = useMoState(null);
 
@@ -56,11 +57,7 @@ function PointageMois({ ctx, currentMonth, onSwitchMonth, onSwitchQuinzaine }) {
       <div className="flex flex-wrap items-center gap-3">
         <MonthSelector currentMonth={currentMonth} onChange={onSwitchMonth} chantierFilter={filterChantier}/>
 
-        <select value={filterChantier} onChange={e => setFilterChantier(e.target.value)}
-                className="bg-white border border-stone-200 rounded-lg px-3 py-2 text-sm">
-          <option value="all">Tous les chantiers</option>
-          {CHANTIERS.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        {/* Chantier filter is now global (topbar switcher) — no per-page <select>. */}
 
         <div className="ml-auto flex items-center gap-2">
           <Btn size="sm" icon={<Icons.Doc size={13}/>}>Exporter en Excel</Btn>

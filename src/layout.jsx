@@ -32,7 +32,7 @@ function StatusPill({ state }) {
 }
 
 // ─── Top bar ──────────────────────────────────────────────────
-function TopBar({ lang, setLang, onMenu }) {
+function TopBar({ lang, setLang, onMenu, currentChantierId, onSwitchChantier, onManageChantiers }) {
   const today = `${TODAY.day} ${MOIS_FR[TODAY.monthIdx]} ${TODAY.year}`;
   const [menuOpen, setMenuOpen] = React.useState(false);
   const menuRef = React.useRef(null);
@@ -100,7 +100,15 @@ function TopBar({ lang, setLang, onMenu }) {
         <span className="text-stone-700">{today}</span>
       </div>
 
-      <div className="ml-auto flex items-center gap-3">
+      <div className="flex-1 flex justify-center min-w-0 px-2">
+        {typeof ChantierSwitcher !== 'undefined' && onSwitchChantier && (
+          <ChantierSwitcher currentChantierId={currentChantierId}
+                            onSwitch={onSwitchChantier}
+                            onManage={onManageChantiers}/>
+        )}
+      </div>
+
+      <div className="flex items-center gap-3">
         <span className="hidden md:inline text-[11px] text-stone-400" title="État de sauvegarde">
           {saveState === 'saving' && '● Sauvegarde…'}
           {saveState === 'saved'  && '✓ Sauvegardé'}

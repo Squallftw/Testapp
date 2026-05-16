@@ -47,7 +47,10 @@ function OnboardingScreen({ onCreated, nextPath }) {
 
       window.__BATI_USER_DATA = r.userState;
       if (window.__BATI_PERSIST_PATCH) {
-        window.__BATI_PERSIST_PATCH({ chantiers: r.userState.chantiers });
+        window.__BATI_PERSIST_PATCH({
+          chantiers: r.userState.chantiers,
+          currentChantierId: r.userState.currentChantierId,
+        });
       }
       try {
         if (window.__BATI_SAVER && typeof window.__BATI_SAVER.flush === 'function') {

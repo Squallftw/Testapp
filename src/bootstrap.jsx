@@ -21,6 +21,7 @@ const APP_MODULES = [
   'src/dashboard.jsx',
   'src/paie.jsx',
   'src/screens.jsx',
+  'src/onboarding/chantier-switcher.jsx',
   'src/planning.jsx',
   'src/affectations.jsx',
   'src/materiels.jsx',

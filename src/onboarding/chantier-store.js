@@ -80,6 +80,10 @@
     prevList.push(chantier);
     next.chantiers = prevList;
 
+    // First-time creation: also point the global current-chantier at this one
+    // so the topbar switcher has something to render immediately after onboarding.
+    if (!next.currentChantierId) next.currentChantierId = chantier.id;
+
     return { ok: true, userState: next, chantier: chantier };
   }
 
