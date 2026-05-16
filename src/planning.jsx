@@ -163,7 +163,18 @@ function Planning({ ctx }) {
   }
 
   // Group span
+  //   - With children: computed from children (sum of durations, span = min→max)
+  //   - Empty + has its own start+duration: use them (parent acts like a single bar)
+  //   - Empty + nothing: zero width, no bar
   function groupSpan(group) {
+    if (!group.children || group.children.length === 0) {
+      if (group.start && group.duration) {
+        const s = dateFromYMD(group.start[0], group.start[1], group.start[2]);
+        const offsetDays = daysBetween(TIMELINE_START, s);
+        return { offset: offsetDays * dayPx, width: group.duration * dayPx, duration: group.duration };
+      }
+      return { offset: 0, width: 0, duration: 0 };
+    }
     let minStart = Infinity, maxEnd = -Infinity, totalDur = 0;
     group.children.forEach(t => {
       const s = startOffsetDays(t);
@@ -195,13 +206,16 @@ function Planning({ ctx }) {
   function saveTask(updated, groupId) {
     if (groupId === '__none__') {
       // No parent picked — create a brand-new top-level group (parent), empty.
-      // The user adds subtasks to it afterwards by re-opening the form with
-      // "Tâche parente" = this group.
+      // Seed it with a start+duration so it shows up as a bar on the Gantt
+      // until the user adds subtasks (at which point children drive the span).
       const newGroupId = 'g-' + Date.now().toString(36);
+      const seq = computeNextStartForParent('__none__');
       setPlan(prev => [...prev, {
         id: newGroupId,
         label: updated.label,
         status: updated.status || 'todo',
+        start: [seq.getFullYear(), seq.getMonth(), seq.getDate()],
+        duration: 30,
         children: [],
       }]);
     } else {
@@ -278,7 +292,15 @@ function Planning({ ctx }) {
     if (!trimmed || !inlineNew) { setInlineNew(null); return; }
     if (inlineNew.kind === 'parent') {
       const newGroupId = 'g-' + Date.now().toString(36);
-      setPlan(prev => [...prev, { id: newGroupId, label: trimmed, status: 'todo', children: [] }]);
+      const seq = computeNextStartForParent('__none__');
+      setPlan(prev => [...prev, {
+        id: newGroupId,
+        label: trimmed,
+        status: 'todo',
+        start: [seq.getFullYear(), seq.getMonth(), seq.getDate()],
+        duration: 30,
+        children: [],
+      }]);
     } else {
       const seq = computeNextStartForParent(inlineNew.parentId);
       saveTask({
@@ -536,8 +558,11 @@ function Planning({ ctx }) {
                       <div className="relative" style={{ width: totalWidth }}>
                         <GridBackground months={months}/>
                         {row.span.width > 0 && (
-                          <div className="absolute rounded-sm"
-                               style={{ left: row.span.offset, top: ROW_H/2 - 3, width: row.span.width, height: 6, background:'#1F2421' }}/>
+                          row.group.children && row.group.children.length > 0
+                            ? <div className="absolute rounded-sm"
+                                   style={{ left: row.span.offset, top: ROW_H/2 - 3, width: row.span.width, height: 6, background:'#1F2421' }}/>
+                            : <div className="absolute rounded shadow-sm"
+                                   style={{ left: row.span.offset, top: ROW_H/2 - 9, width: Math.max(2, row.span.width), height: 18, background: gsc.bar, opacity: 0.9 }}/>
                         )}
                       </div>
                     </div>
@@ -627,6 +652,8 @@ function Planning({ ctx }) {
       {editingGroup && (
         <GroupEditModal
           group={editingGroup}
+          plan={plan}
+          chantier={CHANTIERS.find(c => c.id === chantierId)}
           onSave={(patch) => { saveGroup(editingGroup.id, patch); setEditingGroup(null); }}
           onDelete={() => { deleteGroup(editingGroup.id); setEditingGroup(null); }}
           onClose={() => setEditingGroup(null)}/>
@@ -779,19 +806,70 @@ function TaskEditModal({ mode, task, groupId, plan, chantier, initialStart, onSa
   );
 }
 
-function GroupEditModal({ group, onSave, onDelete, onClose }) {
+function GroupEditModal({ group, plan, chantier, onSave, onDelete, onClose }) {
   const [label, setLabel] = usePlState(group.label || '');
   const [status, setStatus] = usePlState(group.status || 'todo');
+  const childCount = (group.children || []).length;
+  const hasChildren = childCount > 0;
+  const initialStart = group.start
+    ? toISODate(dateFromYMD(group.start[0], group.start[1], group.start[2]))
+    : '';
+  const [startStr, setStartStr] = usePlState(initialStart);
+  const [duration, setDuration] = usePlState(group.duration || 30);
+
+  // Sequential = right after the latest end of all OTHER top-level parents.
+  // Excludes the currently-edited group so renaming it doesn't shift itself.
+  function computeSequentialStart() {
+    const others = (plan || []).filter(g => g.id !== group.id);
+    if (others.length === 0) {
+      if (chantier && chantier.dateStart) {
+        const [y, m, d] = chantier.dateStart.split('-').map(Number);
+        return dateFromYMD(y, m - 1, d);
+      }
+      return new Date();
+    }
+    let latest = null;
+    others.forEach(g => {
+      let gEnd = null;
+      if (g.children && g.children.length > 0) {
+        g.children.forEach(t => {
+          const s = dateFromYMD(t.start[0], t.start[1], t.start[2]);
+          const e = addDaysD(s, t.duration - 1);
+          if (!gEnd || e > gEnd) gEnd = e;
+        });
+      } else if (g.start && g.duration) {
+        const s = dateFromYMD(g.start[0], g.start[1], g.start[2]);
+        gEnd = addDaysD(s, g.duration - 1);
+      }
+      if (gEnd && (!latest || gEnd > latest)) latest = gEnd;
+    });
+    return latest ? addDaysD(latest, 1) : new Date();
+  }
 
   function save() {
     if (!label.trim()) return;
-    onSave({ label: label.trim(), status });
+    const patch = { label: label.trim(), status };
+    // Only allow editing start+duration when there are no children — children
+    // are authoritative for the span when present.
+    if (!hasChildren) {
+      let y, m, d;
+      if (startStr) {
+        [y, m, d] = startStr.split('-').map(Number);
+      } else {
+        const seq = computeSequentialStart();
+        y = seq.getFullYear();
+        m = seq.getMonth() + 1;
+        d = seq.getDate();
+      }
+      patch.start = [y, m - 1, d];
+      patch.duration = Math.max(1, parseInt(duration, 10) || 1);
+    }
+    onSave(patch);
   }
 
   function handleDelete() {
-    const n = (group.children || []).length;
-    const msg = n > 0
-      ? `Supprimer « ${group.label} » et ses ${n} sous-tâche${n > 1 ? 's' : ''} ?`
+    const msg = hasChildren
+      ? `Supprimer « ${group.label} » et ses ${childCount} sous-tâche${childCount > 1 ? 's' : ''} ?`
       : `Supprimer « ${group.label} » ?`;
     if (window.confirm(msg)) onDelete();
   }
@@ -809,8 +887,25 @@ function GroupEditModal({ group, onSave, onDelete, onClose }) {
             {STATUS_ORDER.map(k => <option key={k} value={k}>{STATUS_COLORS[k].label}</option>)}
           </select>
         </div>
-        <div className="text-[11px] text-stone-500">
-          {(group.children || []).length} sous-tâche{(group.children || []).length > 1 ? 's' : ''}
+        {!hasChildren && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Durée (jours)</div>
+                <input type="number" min="1" className="bati-input" value={duration} onChange={e => setDuration(e.target.value)}/>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Date de début</div>
+                <input type="date" className="bati-input" value={startStr} onChange={e => setStartStr(e.target.value)}/>
+              </div>
+            </div>
+            <div className="text-[11px] text-stone-500">Vide = séquentiel (après la dernière tâche parente).</div>
+          </>
+        )}
+        <div className="text-[11px] text-stone-500 bg-stone-50 rounded-lg p-2.5" style={{ background:'#FAF7F1' }}>
+          {hasChildren
+            ? `${childCount} sous-tâche${childCount > 1 ? 's' : ''} — la durée et les dates sont calculées automatiquement à partir des sous-tâches.`
+            : 'Tant qu\'aucune sous-tâche n\'est ajoutée, cette tâche parente s\'affiche sur le Gantt avec sa propre durée et date.'}
         </div>
         <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor:'#F0EAE0' }}>
           <button onClick={handleDelete} className="text-xs font-semibold text-red-600 hover:text-red-700 inline-flex items-center gap-1">
