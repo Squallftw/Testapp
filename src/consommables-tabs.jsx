@@ -652,11 +652,19 @@ function PriceChart({ items }) {
 }
 
 // ─── Fournisseurs tab ─────────────────────────────────────────
-function FournisseursTab({ suppliers, items, purchases, onAdd, onEdit }) {
+function FournisseursTab({ suppliers, items, purchases, saveSupplier, onAdd, onEdit }) {
   const [search, setSearch] = useTbState('');
+  const [inlineNew, setInlineNew] = useTbState(false);
   const filtered = suppliers.filter(s =>
     !search || `${s.name} ${s.type || ''} ${s.city || ''}`.toLowerCase().includes(search.toLowerCase())
   );
+
+  function commitNewSupplier(name) {
+    const trimmed = (name || '').trim();
+    setInlineNew(false);
+    if (!trimmed) return;
+    saveSupplier({ name: trimmed, type: '', city: '', phone: '' }, true);
+  }
 
   // Aggregate per-supplier usage: how many items reference it, total achats value.
   const stats = {};
@@ -679,16 +687,16 @@ function FournisseursTab({ suppliers, items, purchases, onAdd, onEdit }) {
         </div>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-stone-500"><b className="text-stone-900">{filtered.length}</b> fournisseur{filtered.length>1?'s':''}</span>
-          <Btn variant="primary" icon={<Icons.Plus size={13}/>} onClick={() => onAdd('supplier')}>Ajouter</Btn>
+          <Btn variant="primary" icon={<Icons.Plus size={13}/>} onClick={() => setInlineNew(true)}>Ajouter</Btn>
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {filtered.length === 0 && !inlineNew ? (
         <Card className="p-8">
           <EmptyState icon={<Icons.Building size={20}/>}
                       title={suppliers.length === 0 ? "Aucun fournisseur enregistré" : "Aucun résultat"}
                       hint={suppliers.length === 0
-                        ? "Créez votre premier fournisseur pour pouvoir saisir des articles et des achats."
+                        ? "Cliquez sur Ajouter pour créer votre premier fournisseur."
                         : "Ajustez votre recherche."}/>
         </Card>
       ) : (
@@ -707,10 +715,15 @@ function FournisseursTab({ suppliers, items, purchases, onAdd, onEdit }) {
               </tr>
             </thead>
             <tbody>
+              {inlineNew && (
+                <InlineSupplierRow onCommit={commitNewSupplier} onCancel={() => setInlineNew(false)}/>
+              )}
               {filtered.map(s => {
                 const st = stats[s.id] || { itemCount: 0, purchaseCount: 0, purchaseTotal: 0 };
                 return (
-                  <tr key={s.id} className="border-t hover:bg-stone-50/60" style={{ borderColor:'#F0EAE0' }}>
+                  <tr key={s.id} className="border-t hover:bg-stone-50/60 cursor-pointer" style={{ borderColor:'#F0EAE0' }}
+                      onDoubleClick={() => onEdit('supplier', s)}
+                      title="Double-cliquez pour modifier">
                     <td className="px-4 py-2.5 font-semibold">{s.name}</td>
                     <td className="px-3 py-2.5 text-stone-600">{s.type || '—'}</td>
                     <td className="px-3 py-2.5 text-stone-600">{s.city || '—'}</td>
@@ -719,7 +732,7 @@ function FournisseursTab({ suppliers, items, purchases, onAdd, onEdit }) {
                     <td className="px-3 py-2.5 text-right tabular-nums">{st.purchaseCount}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums font-semibold">{formatMADCompact(st.purchaseTotal)}</td>
                     <td className="px-3 py-2.5 text-right">
-                      <button onClick={() => onEdit('supplier', s)}
+                      <button onClick={(e) => { e.stopPropagation(); onEdit('supplier', s); }}
                               className="text-stone-500 hover:text-stone-900 inline-flex items-center gap-1 text-xs font-semibold">
                         <Icons.Edit size={12}/> Modifier
                       </button>
@@ -732,6 +745,34 @@ function FournisseursTab({ suppliers, items, purchases, onAdd, onEdit }) {
         </Card>
       )}
     </div>
+  );
+}
+
+// Inline row for fast supplier creation — only the name is captured; everything
+// else defaults and can be filled in later via double-click.
+function InlineSupplierRow({ onCommit, onCancel }) {
+  const { useState, useRef } = React;
+  const [value, setValue] = useState('');
+  const doneRef = useRef(false);
+  function commit() { if (doneRef.current) return; doneRef.current = true; onCommit(value); }
+  function cancel() { if (doneRef.current) return; doneRef.current = true; onCancel(); }
+  function onKey(e) {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+  }
+  function onBlur() { if (value.trim()) commit(); else cancel(); }
+  return (
+    <tr style={{ borderTop:'1px solid #F0EAE0', background:'#F4FBFB' }}>
+      <td className="px-4 py-2.5" colSpan={8}>
+        <input autoFocus value={value}
+               onChange={e => setValue(e.target.value)}
+               onKeyDown={onKey}
+               onBlur={onBlur}
+               placeholder="Raison sociale du nouveau fournisseur — Entrée pour valider, Échap pour annuler"
+               className="w-full bg-transparent outline-none border-b border-dashed text-sm font-semibold text-stone-900"
+               style={{ borderColor: '#0E5460', padding: '2px 4px' }}/>
+      </td>
+    </tr>
   );
 }
 

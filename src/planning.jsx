@@ -104,6 +104,9 @@ function Planning({ ctx }) {
   const [dragState, setDragState] = usePlState(null);
   const [selectedId, setSelectedId] = usePlState(null);
   const [editingTask, setEditingTask] = usePlState(null); // {mode: 'create'|'edit', task, groupId}
+  const [editingGroup, setEditingGroup] = usePlState(null); // group object being edited
+  const [selectedGroupId, setSelectedGroupId] = usePlState(null);
+  const [inlineNew, setInlineNew] = usePlState(null); // { kind: 'parent' | 'subtask', parentId? } | null
   const wheelRef = usePlRef(null);
   const dayPxRef = usePlRef(dayPx);
   dayPxRef.current = dayPx;
@@ -172,22 +175,35 @@ function Planning({ ctx }) {
     return { offset: minStart * dayPx, width: (maxEnd - minStart + 1) * dayPx, duration: totalDur };
   }
 
-  // Flatten rows
+  // Flatten rows. Inline-create rows are spliced in at the right place so they
+  // look exactly like a regular row but with an autofocused name input.
   const rows = [];
   plan.forEach(g => {
     const span = groupSpan(g);
     rows.push({ kind: 'group', id: g.id, label: g.label, span, group: g });
     if (expanded[g.id] !== false) {
       g.children.forEach(t => rows.push({ kind: 'task', task: t, groupId: g.id }));
+      if (inlineNew && inlineNew.kind === 'subtask' && inlineNew.parentId === g.id) {
+        rows.push({ kind: 'inline-subtask', groupId: g.id });
+      }
     }
   });
+  if (inlineNew && inlineNew.kind === 'parent') {
+    rows.push({ kind: 'inline-parent' });
+  }
 
   function saveTask(updated, groupId) {
     if (groupId === '__none__') {
-      // No parent picked — create a brand-new top-level group whose label is the
-      // task's name and put this task as the group's only child.
+      // No parent picked — create a brand-new top-level group (parent), empty.
+      // The user adds subtasks to it afterwards by re-opening the form with
+      // "Tâche parente" = this group.
       const newGroupId = 'g-' + Date.now().toString(36);
-      setPlan(prev => [...prev, { id: newGroupId, label: updated.label, children: [updated] }]);
+      setPlan(prev => [...prev, {
+        id: newGroupId,
+        label: updated.label,
+        status: updated.status || 'todo',
+        children: [],
+      }]);
     } else {
       setPlan(prev => {
         // Remove from any group except target, then upsert into target
@@ -212,15 +228,73 @@ function Planning({ ctx }) {
     });
   }
 
+  function saveGroup(groupId, patch) {
+    setPlan(prev => prev.map(g => g.id === groupId ? { ...g, ...patch } : g));
+  }
+
+  function deleteGroup(groupId) {
+    setPlan(prev => prev.filter(g => g.id !== groupId));
+  }
+
+  // Default start when the user creates a task without giving a date:
+  // chain it right after the latest task already in the chosen scope.
+  function computeNextStartForParent(parentId) {
+    let pool;
+    if (parentId == null || parentId === '__none__') {
+      pool = plan.flatMap(g => g.children);
+    } else {
+      const g = plan.find(x => x.id === parentId);
+      pool = (g && g.children) || [];
+    }
+    if (pool.length === 0) {
+      const ch = CHANTIERS.find(c => c.id === chantierId);
+      if (ch && ch.dateStart) {
+        const [y, m, d] = ch.dateStart.split('-').map(Number);
+        return dateFromYMD(y, m - 1, d);
+      }
+      return new Date();
+    }
+    const endOf = (t) => {
+      const s = dateFromYMD(t.start[0], t.start[1], t.start[2]);
+      return addDaysD(s, t.duration - 1);
+    };
+    let latest = endOf(pool[0]);
+    for (let i = 1; i < pool.length; i++) {
+      const e = endOf(pool[i]);
+      if (e > latest) latest = e;
+    }
+    return addDaysD(latest, 1);
+  }
+
+  function startInlineParent() {
+    setInlineNew({ kind: 'parent' });
+  }
+  function startInlineSubtask(parentId) {
+    setExpanded(prev => ({ ...prev, [parentId]: true }));
+    setInlineNew({ kind: 'subtask', parentId });
+  }
+  function commitInlineNew(label) {
+    const trimmed = (label || '').trim();
+    if (!trimmed || !inlineNew) { setInlineNew(null); return; }
+    if (inlineNew.kind === 'parent') {
+      const newGroupId = 'g-' + Date.now().toString(36);
+      setPlan(prev => [...prev, { id: newGroupId, label: trimmed, status: 'todo', children: [] }]);
+    } else {
+      const seq = computeNextStartForParent(inlineNew.parentId);
+      saveTask({
+        id: 't-' + Date.now().toString(36),
+        label: trimmed,
+        start: [seq.getFullYear(), seq.getMonth(), seq.getDate()],
+        duration: 5,
+        status: 'todo',
+      }, inlineNew.parentId);
+    }
+    setInlineNew(null);
+  }
+
   function deleteTask(taskId) {
     setPlan(prev => prev.map(g => ({ ...g, children: g.children.filter(t => t.id !== taskId) })));
     setSelectedId(null);
-  }
-
-  function openCreate() {
-    // Parent defaults to "— Aucune"; if there are existing groups the user can
-    // pick one inside the modal. plan can safely be empty here.
-    setEditingTask({ mode: 'create', task: null, groupId: '__none__' });
   }
 
   const ROW_H = 36;
@@ -353,7 +427,7 @@ function Planning({ ctx }) {
                               className="px-2.5 py-1 text-xs font-semibold rounded text-stone-600 hover:bg-white">+</button>
                     </div>
                     <Btn size="sm" icon={<Icons.Doc size={13}/>}>Exporter</Btn>
-                    <Btn size="sm" variant="primary" icon={<Icons.Plus size={13}/>} onClick={openCreate}>Tâche</Btn>
+                    <Btn size="sm" variant="primary" icon={<Icons.Plus size={13}/>} onClick={startInlineParent}>Tâche</Btn>
                   </>}/>
 
       {/* Legend + summary */}
@@ -382,9 +456,14 @@ function Planning({ ctx }) {
             {/* Header */}
             <div className="sticky top-0 z-20 flex border-b-2" style={{ height: HEADER_H, borderColor:'#E8E2D8', background:'#FAF7F1' }}>
               {/* Left header cell */}
-              <div className="sticky left-0 z-10 flex items-end px-4 pb-2 font-bold text-[10px] uppercase tracking-wider text-stone-600 border-r"
+              <div className="sticky left-0 z-10 flex items-end justify-between px-4 pb-2 font-bold text-[10px] uppercase tracking-wider text-stone-600 border-r"
                    style={{ width: LEFT_W, background:'#FAF7F1', borderColor:'#E8E2D8' }}>
-                Tâche
+                <span>Tâche</span>
+                <button onClick={startInlineParent}
+                        title="Ajouter une tâche parente (Entrée pour valider)"
+                        className="text-stone-500 hover:text-stone-900 rounded p-0.5 -mb-0.5">
+                  <Icons.Plus size={13}/>
+                </button>
               </div>
               {/* Timeline header */}
               <div className="relative" style={{ width: totalWidth }}>
@@ -418,22 +497,48 @@ function Planning({ ctx }) {
               </div>
 
               {rows.map((row, i) => {
-                if (row.kind === 'group') {
+                if (row.kind === 'inline-parent' || row.kind === 'inline-subtask') {
                   return (
-                    <div key={row.id} className="flex border-b" style={{ height: ROW_H, borderColor:'#F0EAE0', background:'#FAF7F1' }}>
-                      <div className="sticky left-0 z-[5] flex items-center px-3 border-r"
-                           style={{ width: LEFT_W, background:'#FAF7F1', borderColor:'#E8E2D8' }}>
+                    <InlineNewRow key={`inl-${row.kind}-${row.groupId || 'top'}`}
+                                  kind={row.kind === 'inline-parent' ? 'parent' : 'subtask'}
+                                  rowH={ROW_H} leftW={LEFT_W} totalWidth={totalWidth}
+                                  onCommit={commitInlineNew}
+                                  onCancel={() => setInlineNew(null)}/>
+                  );
+                }
+                if (row.kind === 'group') {
+                  const gsc = STATUS_COLORS[row.group.status] || STATUS_COLORS.todo;
+                  const isSelected = selectedGroupId === row.id;
+                  const bg = isSelected ? '#E8F0F1' : '#FAF7F1';
+                  return (
+                    <div key={row.id} className="flex border-b" style={{ height: ROW_H, borderColor:'#F0EAE0', background: bg }}>
+                      <div className="sticky left-0 z-[5] flex items-center px-3 border-r group/parent"
+                           onClick={(e) => {
+                             if (e.target.closest('button')) return;
+                             setSelectedGroupId(row.id);
+                             setSelectedId(null);
+                           }}
+                           onDoubleClick={() => setEditingGroup(row.group)}
+                           style={{ width: LEFT_W, background: bg, borderColor:'#E8E2D8', cursor:'pointer' }}>
                         <button onClick={() => setExpanded({ ...expanded, [row.id]: expanded[row.id] === false })}
                                 className="mr-2 text-stone-500 hover:text-stone-900">
                           <span className="inline-block transition-transform" style={{ transform: expanded[row.id] !== false ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▼</span>
                         </button>
-                        <span className="font-bold text-[11px] tracking-wider text-stone-800 flex-1">{row.label}</span>
-                        <span className="text-[10px] font-semibold text-stone-500 tabular-nums">{row.span.duration}j</span>
+                        <span className="w-2 h-2 rounded-full mr-2" style={{ background: gsc.dot }}/>
+                        <span className="font-bold text-[11px] tracking-wider text-stone-800 flex-1 truncate">{row.label}</span>
+                        <span className="text-[10px] font-semibold text-stone-500 tabular-nums mr-2">{row.span.duration}j</span>
+                        <button onClick={(e) => { e.stopPropagation(); startInlineSubtask(row.id); }}
+                                title="Ajouter une sous-tâche"
+                                className="opacity-0 group-hover/parent:opacity-100 transition-opacity text-stone-500 hover:text-stone-900 rounded p-0.5">
+                          <Icons.Plus size={12}/>
+                        </button>
                       </div>
                       <div className="relative" style={{ width: totalWidth }}>
                         <GridBackground months={months}/>
-                        <div className="absolute rounded-sm"
-                             style={{ left: row.span.offset, top: ROW_H/2 - 3, width: row.span.width, height: 6, background:'#1F2421' }}/>
+                        {row.span.width > 0 && (
+                          <div className="absolute rounded-sm"
+                               style={{ left: row.span.offset, top: ROW_H/2 - 3, width: row.span.width, height: 6, background:'#1F2421' }}/>
+                        )}
                       </div>
                     </div>
                   );
@@ -447,7 +552,7 @@ function Planning({ ctx }) {
                 const isSelected = selectedId === t.id;
                 return (
                   <div key={t.id}
-                       onClick={() => setSelectedId(t.id)}
+                       onClick={() => { setSelectedId(t.id); setSelectedGroupId(null); }}
                        onDoubleClick={() => setEditingTask({ mode:'edit', task: t, groupId: row.groupId })}
                        className={`flex border-b cursor-pointer ${isSelected ? '' : 'hover:bg-stone-50/60'}`}
                        style={{ height: ROW_H, borderColor:'#F5EFE3', background: isSelected ? '#E8F0F1' : undefined }}>
@@ -519,6 +624,13 @@ function Planning({ ctx }) {
           onDelete={() => { deleteTask(editingTask.task.id); setEditingTask(null); }}
           onClose={() => setEditingTask(null)}/>
       )}
+      {editingGroup && (
+        <GroupEditModal
+          group={editingGroup}
+          onSave={(patch) => { saveGroup(editingGroup.id, patch); setEditingGroup(null); }}
+          onDelete={() => { deleteGroup(editingGroup.id); setEditingGroup(null); }}
+          onClose={() => setEditingGroup(null)}/>
+      )}
     </div>
   );
 }
@@ -589,26 +701,18 @@ function TaskEditModal({ mode, task, groupId, plan, chantier, initialStart, onSa
     onSave(updated, groupSel);
   }
 
+  const isParent = groupSel === '__none__';
+
   return (
-    <Modal title={mode === 'create' ? 'Nouvelle tâche' : 'Modifier la tâche'} onClose={onClose} width="max-w-lg">
+    <Modal title={mode === 'create'
+                    ? (isParent ? 'Nouvelle tâche parente' : 'Nouvelle sous-tâche')
+                    : 'Modifier la tâche'}
+           onClose={onClose} width="max-w-lg">
       <div className="space-y-4">
         <div>
           <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Nom</div>
           <input className="bati-input" autoFocus value={label} onChange={e => setLabel(e.target.value)}
-                 placeholder="ex. DALLAGES, MAÇONNERIE, ÉLECTRICITÉ…"/>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Durée (jours)</div>
-            <input type="number" min="1" className="bati-input" value={duration} onChange={e => setDuration(e.target.value)}/>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Statut</div>
-            <select className="bati-input" value={status} onChange={e => setStatus(e.target.value)}>
-              {STATUS_ORDER.map(k => <option key={k} value={k}>{STATUS_COLORS[k].label}</option>)}
-            </select>
-          </div>
+                 placeholder={isParent ? 'ex. GROS ŒUVRE, ÉTANCHÉITÉ…' : 'ex. DALLAGES, MAÇONNERIE…'}/>
         </div>
 
         <div>
@@ -619,11 +723,43 @@ function TaskEditModal({ mode, task, groupId, plan, chantier, initialStart, onSa
           </select>
         </div>
 
-        <div>
-          <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Date de début</div>
-          <input type="date" className="bati-input" value={startStr} onChange={e => setStartStr(e.target.value)}/>
-          <div className="text-[11px] text-stone-500 mt-1">Vide = séquentiel</div>
-        </div>
+        {!isParent && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Durée (jours)</div>
+              <input type="number" min="1" className="bati-input" value={duration} onChange={e => setDuration(e.target.value)}/>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Statut</div>
+              <select className="bati-input" value={status} onChange={e => setStatus(e.target.value)}>
+                {STATUS_ORDER.map(k => <option key={k} value={k}>{STATUS_COLORS[k].label}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {isParent && (
+          <div>
+            <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Statut</div>
+            <select className="bati-input" value={status} onChange={e => setStatus(e.target.value)}>
+              {STATUS_ORDER.map(k => <option key={k} value={k}>{STATUS_COLORS[k].label}</option>)}
+            </select>
+          </div>
+        )}
+
+        {!isParent && (
+          <div>
+            <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Date de début</div>
+            <input type="date" className="bati-input" value={startStr} onChange={e => setStartStr(e.target.value)}/>
+            <div className="text-[11px] text-stone-500 mt-1">Vide = séquentiel (juste après la dernière sous-tâche)</div>
+          </div>
+        )}
+
+        {isParent && (
+          <div className="text-[11px] text-stone-500 bg-stone-50 rounded-lg p-2.5" style={{ background:'#FAF7F1' }}>
+            Une tâche parente est un conteneur. Sa durée et ses dates seront calculées automatiquement à partir des sous-tâches que vous lui ajouterez ensuite.
+          </div>
+        )}
 
         <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor:'#F0EAE0' }}>
           {mode === 'edit' ? (
@@ -640,6 +776,110 @@ function TaskEditModal({ mode, task, groupId, plan, chantier, initialStart, onSa
         </div>
       </div>
     </Modal>
+  );
+}
+
+function GroupEditModal({ group, onSave, onDelete, onClose }) {
+  const [label, setLabel] = usePlState(group.label || '');
+  const [status, setStatus] = usePlState(group.status || 'todo');
+
+  function save() {
+    if (!label.trim()) return;
+    onSave({ label: label.trim(), status });
+  }
+
+  function handleDelete() {
+    const n = (group.children || []).length;
+    const msg = n > 0
+      ? `Supprimer « ${group.label} » et ses ${n} sous-tâche${n > 1 ? 's' : ''} ?`
+      : `Supprimer « ${group.label} » ?`;
+    if (window.confirm(msg)) onDelete();
+  }
+
+  return (
+    <Modal title="Modifier la tâche parente" onClose={onClose} width="max-w-md">
+      <div className="space-y-4">
+        <div>
+          <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Nom</div>
+          <input className="bati-input" autoFocus value={label} onChange={e => setLabel(e.target.value)}/>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1.5">Statut</div>
+          <select className="bati-input" value={status} onChange={e => setStatus(e.target.value)}>
+            {STATUS_ORDER.map(k => <option key={k} value={k}>{STATUS_COLORS[k].label}</option>)}
+          </select>
+        </div>
+        <div className="text-[11px] text-stone-500">
+          {(group.children || []).length} sous-tâche{(group.children || []).length > 1 ? 's' : ''}
+        </div>
+        <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor:'#F0EAE0' }}>
+          <button onClick={handleDelete} className="text-xs font-semibold text-red-600 hover:text-red-700 inline-flex items-center gap-1">
+            <Icons.Trash size={12}/> Supprimer
+          </button>
+          <div className="flex gap-2">
+            <Btn onClick={onClose}>Annuler</Btn>
+            <Btn variant="primary" onClick={save} disabled={!label.trim()}>Enregistrer</Btn>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Inline row used inside the Planning gantt to spawn a new parent or subtask
+// without opening a modal. Renders as a regular row but with an autofocused
+// name input. Enter commits, Escape cancels, blur commits if non-empty.
+function InlineNewRow({ kind, rowH, leftW, totalWidth, onCommit, onCancel }) {
+  const { useState, useRef } = React;
+  const [value, setValue] = useState('');
+  const doneRef = useRef(false);
+  const isParent = kind === 'parent';
+  const dot = STATUS_COLORS.todo.dot;
+
+  function commit() {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onCommit(value);
+  }
+  function cancel() {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onCancel();
+  }
+  function onKey(e) {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+  }
+  function onBlur() {
+    if (value.trim()) commit(); else cancel();
+  }
+
+  const bg = isParent ? '#FAF7F1' : 'white';
+  return (
+    <div className="flex border-b" style={{ height: rowH, borderColor:'#F0EAE0', background: bg }}>
+      <div className="sticky left-0 z-[5] flex items-center px-3 border-r"
+           style={{ width: leftW, background: bg, borderColor:'#E8E2D8' }}>
+        {isParent ? (
+          <>
+            <span className="inline-block mr-2 text-stone-400">▼</span>
+            <span className="w-2 h-2 rounded-full mr-2" style={{ background: dot }}/>
+          </>
+        ) : (
+          <span className="w-2 h-2 rounded-full ml-6 mr-3" style={{ background: dot }}/>
+        )}
+        <input autoFocus value={value}
+               onChange={e => setValue(e.target.value)}
+               onKeyDown={onKey}
+               onBlur={onBlur}
+               placeholder={isParent
+                 ? 'Nouvelle tâche parente — Entrée pour valider, Échap pour annuler'
+                 : 'Nouvelle sous-tâche — Entrée pour valider, Échap pour annuler'}
+               className={`flex-1 bg-transparent outline-none border-b border-dashed min-w-0 ${isParent ? 'font-bold text-[11px] uppercase tracking-wider' : 'text-[11px] tracking-wider'} text-stone-900`}
+               style={{ borderColor: '#0E5460', padding: '2px 4px' }}/>
+        {!isParent && <span className="text-[10px] font-semibold text-stone-400 tabular-nums ml-2">5j</span>}
+      </div>
+      <div className="relative" style={{ width: totalWidth }}/>
+    </div>
   );
 }
 
