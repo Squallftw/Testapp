@@ -576,7 +576,12 @@ $$;
 --      an org, but
 --   2. `memberships_insert` requires the caller to already be owner/admin
 --      of the target org — chicken-and-egg without this SECURITY DEFINER.
-create or replace function app.create_organization_with_owner(p_input jsonb)
+--
+-- Lives in `public` (not `app`) so PostgREST exposes it as an RPC —
+-- Supabase only routes RPC calls to schemas in the "Exposed schemas"
+-- list, which defaults to `public`. The internal helpers below stay in
+-- `app` since they're called only from RLS policies, not from the client.
+create or replace function public.create_organization_with_owner(p_input jsonb)
 returns public.organizations
 language plpgsql security definer set search_path = public, app as $$
 declare
@@ -1107,13 +1112,13 @@ revoke execute on function app.user_worker_id_in_org(uuid)              from pub
 revoke execute on function app.bump_updated_at()                        from public;
 revoke execute on function app.write_audit()                            from public;
 revoke execute on function app.sync_labor_entry()                       from public;
-revoke execute on function app.create_organization_with_owner(jsonb)    from public;
+revoke execute on function public.create_organization_with_owner(jsonb) from public;
 
 grant execute on function app.user_orgs()                              to authenticated;
 grant execute on function app.user_role_in_org(uuid)                   to authenticated;
 grant execute on function app.user_has_chantier(uuid)                  to authenticated;
 grant execute on function app.user_worker_id_in_org(uuid)              to authenticated;
-grant execute on function app.create_organization_with_owner(jsonb)    to authenticated;
+grant execute on function public.create_organization_with_owner(jsonb) to authenticated;
 -- Trigger-only functions (bump_updated_at, write_audit, sync_labor_entry)
 -- are intentionally NOT granted to authenticated. Triggers run as the
 -- function owner (SECURITY DEFINER) regardless of who fires them.
