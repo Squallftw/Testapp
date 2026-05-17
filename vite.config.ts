@@ -32,7 +32,7 @@ const DEV_CSP = [
 export default defineConfig(({ command }) => ({
   // Switch to '/<repo-name>/' for a GitHub Pages project site
   // (username.github.io/<repo-name>/). Leave '/' for a user/org site or any host.
-  base: '/',
+  base: '/Testapp/',
 
   resolve: {
     alias: {
