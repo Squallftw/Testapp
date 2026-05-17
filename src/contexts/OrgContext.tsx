@@ -35,6 +35,8 @@ function writeLastOrgId(id: string | null): void {
 export interface OrgContextValue {
   activeOrg: orgsDAL.Organization | null;
   orgs: orgsDAL.Organization[];
+  /** Role of the current user in the active org. */
+  myRole: orgsDAL.OrgRole | null;
   /** True while the initial fetch (or a refresh) is in flight. */
   loading: boolean;
   /** Last error from a load/refresh, or null. Consumed by ProtectedRoute. */
@@ -52,15 +54,15 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   // Depend on the user id, not the whole session object — otherwise every
   // ~50-minute Supabase token refresh would re-trigger listMyOrgs().
   const userId = session?.user?.id ?? null;
-  const [orgs, setOrgs] = useState<orgsDAL.Organization[]>([]);
-  const [activeOrg, setActiveOrgState] = useState<orgsDAL.Organization | null>(null);
+  const [memberships, setMemberships] = useState<orgsDAL.OrgWithRole[]>([]);
+  const [activeOrgId, setActiveOrgIdState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   const refresh = useCallback(async () => {
     if (!userId) {
-      setOrgs([]);
-      setActiveOrgState(null);
+      setMemberships([]);
+      setActiveOrgIdState(null);
       setActiveOrgInDAL(null);
       setLoading(false);
       return;
@@ -69,16 +71,19 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const fetched = await orgsDAL.listMyOrgs();
-      setOrgs(fetched);
+      setMemberships(fetched);
 
       const previous = readLastOrgId();
       const restored =
-        previous !== null ? fetched.find((o) => o.id === previous) : undefined;
+        previous !== null
+          ? fetched.find((m) => m.organization.id === previous)
+          : undefined;
       const next = restored ?? fetched[0] ?? null;
+      const nextId = next?.organization.id ?? null;
 
-      setActiveOrgState(next);
-      setActiveOrgInDAL(next?.id ?? null);
-      writeLastOrgId(next?.id ?? null);
+      setActiveOrgIdState(nextId);
+      setActiveOrgInDAL(nextId);
+      writeLastOrgId(nextId);
     } catch (err) {
       setError(err instanceof Error ? err : new Error(String(err)));
     } finally {
@@ -92,19 +97,27 @@ export function OrgProvider({ children }: { children: ReactNode }) {
 
   const selectOrg = useCallback(
     (orgId: string) => {
-      const org = orgs.find((o) => o.id === orgId);
-      if (!org) return;
-      setActiveOrgState(org);
-      setActiveOrgInDAL(org.id);
-      writeLastOrgId(org.id);
+      const membership = memberships.find((m) => m.organization.id === orgId);
+      if (!membership) return;
+      setActiveOrgIdState(orgId);
+      setActiveOrgInDAL(orgId);
+      writeLastOrgId(orgId);
     },
-    [orgs]
+    [memberships]
   );
 
-  const value = useMemo<OrgContextValue>(
-    () => ({ activeOrg, orgs, loading, error, selectOrg, refresh }),
-    [activeOrg, orgs, loading, error, selectOrg, refresh]
-  );
+  const value = useMemo<OrgContextValue>(() => {
+    const active = memberships.find((m) => m.organization.id === activeOrgId) ?? null;
+    return {
+      activeOrg: active?.organization ?? null,
+      orgs: memberships.map((m) => m.organization),
+      myRole: active?.role ?? null,
+      loading,
+      error,
+      selectOrg,
+      refresh,
+    };
+  }, [memberships, activeOrgId, loading, error, selectOrg, refresh]);
 
   return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>;
 }

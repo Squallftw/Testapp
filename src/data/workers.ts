@@ -1,4 +1,5 @@
-import { todo } from './errors';
+import { getActiveOrgId, getSupabase } from './client';
+import { mapSupabaseError, NotFoundError } from './errors';
 
 export type WorkerStatus = 'active' | 'inactive';
 
@@ -26,22 +27,83 @@ export type CreateWorkerInput = Omit<
 
 export type UpdateWorkerInput = Partial<CreateWorkerInput>;
 
+export const WORKER_STATUS_LABEL: Record<WorkerStatus, string> = {
+  active: 'Actif',
+  inactive: 'Inactif',
+};
+
 export async function listWorkers(): Promise<Worker[]> {
-  return todo('workers.listWorkers');
+  const orgId = getActiveOrgId();
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('workers')
+    .select('*')
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .order('full_name', { ascending: true });
+  if (error) throw mapSupabaseError(error);
+  return (data ?? []) as unknown as Worker[];
 }
 
 export async function getWorker(id: string): Promise<Worker> {
-  return todo('workers.getWorker', id);
+  const orgId = getActiveOrgId();
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('workers')
+    .select('*')
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (error) throw mapSupabaseError(error);
+  if (!data) throw new NotFoundError(`Ouvrier ${id} introuvable`);
+  return data as unknown as Worker;
 }
 
 export async function createWorker(input: CreateWorkerInput): Promise<Worker> {
-  return todo('workers.createWorker', input);
+  const orgId = getActiveOrgId();
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('workers')
+    .insert({ ...input, org_id: orgId })
+    .select('*')
+    .single();
+  if (error) throw mapSupabaseError(error);
+  return data as unknown as Worker;
 }
 
-export async function updateWorker(id: string, input: UpdateWorkerInput): Promise<Worker> {
-  return todo('workers.updateWorker', id, input);
+export async function updateWorker(
+  id: string,
+  input: UpdateWorkerInput
+): Promise<Worker> {
+  const orgId = getActiveOrgId();
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('workers')
+    .update(input)
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .select('*')
+    .single();
+  if (error) throw mapSupabaseError(error);
+  return data as unknown as Worker;
 }
 
 export async function softDeleteWorker(id: string): Promise<void> {
-  return todo('workers.softDeleteWorker', id);
+  const orgId = getActiveOrgId();
+  const supabase = getSupabase();
+  const { error } = await supabase
+    .from('workers')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .is('deleted_at', null);
+  if (error) throw mapSupabaseError(error);
+}
+
+/** Hue (0–360) → HSL color. Used as the pointage grid row band. */
+export function hueToColor(hue: number | null): string {
+  if (hue === null || !Number.isFinite(hue)) return '#54667A';
+  return `hsl(${hue % 360}, 45%, 50%)`;
 }

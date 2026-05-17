@@ -1,4 +1,5 @@
-import { todo } from './errors';
+import { getActiveOrgId, getSupabase } from './client';
+import { mapSupabaseError, NotFoundError } from './errors';
 
 export interface Supplier {
   id: string;
@@ -22,24 +23,71 @@ export type CreateSupplierInput = Omit<
 export type UpdateSupplierInput = Partial<CreateSupplierInput>;
 
 export async function listSuppliers(): Promise<Supplier[]> {
-  return todo('suppliers.listSuppliers');
+  const orgId = getActiveOrgId();
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('suppliers')
+    .select('*')
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .order('name');
+  if (error) throw mapSupabaseError(error);
+  return (data ?? []) as unknown as Supplier[];
 }
 
 export async function getSupplier(id: string): Promise<Supplier> {
-  return todo('suppliers.getSupplier', id);
+  const orgId = getActiveOrgId();
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('suppliers')
+    .select('*')
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (error) throw mapSupabaseError(error);
+  if (!data) throw new NotFoundError(`Fournisseur ${id} introuvable`);
+  return data as unknown as Supplier;
 }
 
 export async function createSupplier(input: CreateSupplierInput): Promise<Supplier> {
-  return todo('suppliers.createSupplier', input);
+  const orgId = getActiveOrgId();
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('suppliers')
+    .insert({ ...input, org_id: orgId })
+    .select('*')
+    .single();
+  if (error) throw mapSupabaseError(error);
+  return data as unknown as Supplier;
 }
 
 export async function updateSupplier(
   id: string,
   input: UpdateSupplierInput
 ): Promise<Supplier> {
-  return todo('suppliers.updateSupplier', id, input);
+  const orgId = getActiveOrgId();
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('suppliers')
+    .update(input)
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .is('deleted_at', null)
+    .select('*')
+    .single();
+  if (error) throw mapSupabaseError(error);
+  return data as unknown as Supplier;
 }
 
 export async function softDeleteSupplier(id: string): Promise<void> {
-  return todo('suppliers.softDeleteSupplier', id);
+  const orgId = getActiveOrgId();
+  const supabase = getSupabase();
+  const { error } = await supabase
+    .from('suppliers')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('org_id', orgId)
+    .is('deleted_at', null);
+  if (error) throw mapSupabaseError(error);
 }

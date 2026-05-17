@@ -9,6 +9,18 @@ them; check them off as they land.
 
 ---
 
+## 📦 Migrations to apply before using the live app
+
+Run these in the Supabase SQL Editor in order. The app degrades gracefully if
+any are missing (member-list and purchase-creation just fail) but **migration
+0004 is required for the Planning page**.
+
+- ⏳ `supabase/migrations/0002_member_management.sql` — members RPCs + last-owner trigger
+- ⏳ `supabase/migrations/0003_consumables_views.sql` — purchase RPC + stock-on-hand view
+- ⏳ `supabase/migrations/0004_tasks_rpcs.sql` — task + assignment RPCs (Planning)
+
+---
+
 ## 🔴 Critical before production
 
 Blockers for any real user data or paying customer.

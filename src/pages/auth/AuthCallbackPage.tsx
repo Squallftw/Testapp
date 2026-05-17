@@ -10,13 +10,17 @@ import { LoadingScreen } from '@/components/LoadingScreen';
  * onAuthStateChange listener picks it up and we just need to navigate.
  */
 export default function AuthCallbackPage() {
-  const { session, loading } = useAuth();
+  const { session, loading, passwordRecovery } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (loading) return;
+    if (passwordRecovery) {
+      navigate('/auth/update-password', { replace: true });
+      return;
+    }
     navigate(session ? '/' : '/login', { replace: true });
-  }, [session, loading, navigate]);
+  }, [session, loading, passwordRecovery, navigate]);
 
   return <LoadingScreen label="Vérification…" />;
 }

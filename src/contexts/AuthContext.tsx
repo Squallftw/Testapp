@@ -20,10 +20,18 @@ export interface AuthContextValue {
   user: User | null;
   /** True only during the initial session fetch on mount. */
   loading: boolean;
+  /**
+   * True between a Supabase PASSWORD_RECOVERY event and the next
+   * successful `updatePassword()` call. The recovery-magic-link establishes
+   * a session with the OLD password — the user MUST set a new one before
+   * navigating into the app.
+   */
+  passwordRecovery: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<SignUpResult>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -31,6 +39,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -56,8 +65,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (!mounted) return;
+      if (event === 'PASSWORD_RECOVERY') {
+        setPasswordRecovery(true);
+      } else if (event === 'SIGNED_OUT') {
+        setPasswordRecovery(false);
+      }
       setSession(newSession);
     });
 
@@ -103,17 +117,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }, []);
 
+  const updatePassword = useCallback(async (newPassword: string) => {
+    const supabase = getSupabase();
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+    setPasswordRecovery(false);
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
       user: session?.user ?? null,
       loading,
+      passwordRecovery,
       signIn,
       signUp,
       signOut,
       resetPassword,
+      updatePassword,
     }),
-    [session, loading, signIn, signUp, signOut, resetPassword]
+    [
+      session,
+      loading,
+      passwordRecovery,
+      signIn,
+      signUp,
+      signOut,
+      resetPassword,
+      updatePassword,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
