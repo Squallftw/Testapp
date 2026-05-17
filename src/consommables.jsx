@@ -150,12 +150,9 @@ function Consommables({ ctx }) {
 
   const tabs = [
     { id: 'apercu',        label: 'Aperçu',       icon: 'Dashboard' },
-    { id: 'catalogue',     label: 'Catalogue',    icon: 'Coins' },
     { id: 'achats',        label: 'Achats',       icon: 'Plus' },
     { id: 'consommation',  label: 'Consommation', icon: 'Minus' },
-    { id: 'stocks',        label: 'Stocks',       icon: 'Building' },
-    { id: 'fournisseurs',  label: 'Fournisseurs', icon: 'Bank' },
-    { id: 'analyses',      label: 'Analyses',     icon: 'TrendUp' }
+    { id: 'stocks',        label: 'Stocks',       icon: 'Building' }
   ];
 
   const sharedCtx = {
@@ -197,12 +194,9 @@ function Consommables({ ctx }) {
       </div>
 
       {tab === 'apercu'       && <ApercuTab {...sharedCtx}/>}
-      {tab === 'catalogue'    && <CatalogueTab {...sharedCtx}/>}
       {tab === 'achats'       && <AchatsTab {...sharedCtx}/>}
       {tab === 'consommation' && <ConsommationTab {...sharedCtx}/>}
       {tab === 'stocks'       && <StocksTab {...sharedCtx}/>}
-      {tab === 'fournisseurs' && <FournisseursTab {...sharedCtx}/>}
-      {tab === 'analyses'     && <AnalysesTab {...sharedCtx}/>}
 
       {/* Add / Edit modals */}
       {adding === 'item' && <ItemForm items={items} onClose={() => setAdding(null)}
@@ -235,7 +229,7 @@ function Consommables({ ctx }) {
 }
 
 // ─── Aperçu (dashboard) tab ───────────────────────────────────
-function ApercuTab({ items, purchases, consumption, transfers, audit, onAdd }) {
+function ApercuTab({ items, purchases, consumption, transfers, audit, suppliers, onAdd, onEdit }) {
   // Stock & alerts
   const stockByItem = useCnMemo(() => {
     const m = {};
@@ -421,6 +415,98 @@ function ApercuTab({ items, purchases, consumption, transfers, audit, onAdd }) {
               );
             })}
           </div>
+        </Card>
+
+        {/* Articles — replaces the former Catalogue tab */}
+        <Card className="lg:col-span-2 overflow-hidden">
+          <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor:'#F0EAE0' }}>
+            <div className="flex items-center gap-2">
+              <Icons.Coins size={14} className="text-stone-500"/>
+              <h3 className="font-bold text-sm">Articles au catalogue</h3>
+              <span className="text-[10px] text-stone-500 tabular-nums">{items.length}</span>
+            </div>
+            <Btn size="sm" variant="primary" icon={<Icons.Plus size={11}/>} onClick={() => onAdd('item')}>Article</Btn>
+          </div>
+          {items.length === 0 ? (
+            <EmptyState icon={<Icons.Coins size={20}/>} title="Aucun article" hint="Ajoutez votre premier article pour démarrer le suivi."/>
+          ) : (
+            <>
+              <div className="divide-y" style={{ borderColor:'#F0EAE0' }}>
+                {items.slice(0, 8).map(it => {
+                  const stock = stockByItem[it.id]?.total || 0;
+                  const low = stock < it.threshold;
+                  const cat = CONSOMM_CATEGORIES[it.cat];
+                  return (
+                    <div key={it.id} onClick={() => onEdit('item', it)}
+                         className="px-4 py-2 flex items-center gap-3 cursor-pointer hover:bg-stone-50"
+                         style={{ borderColor:'#F0EAE0' }}
+                         title="Cliquer pour modifier">
+                      <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ background: cat?.color || '#9C9082' }}/>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm truncate">{it.name}</div>
+                        <div className="text-[10px] text-stone-500">{cat?.label || '—'} · {it.unit} · {formatMADCompact(it.price)}/{it.unit}</div>
+                      </div>
+                      <div className="text-right" style={{ minWidth: 80 }}>
+                        <div className="text-xs font-bold tabular-nums" style={{ color: low ? '#C25B3F' : '#0E5460' }}>
+                          {stock.toFixed(stock % 1 === 0 ? 0 : 1)} <span className="text-stone-400 font-medium">{it.unit}</span>
+                        </div>
+                        <div className="text-[10px] text-stone-400">seuil {it.threshold}</div>
+                      </div>
+                      <Icons.Edit size={12} className="text-stone-300 flex-shrink-0"/>
+                    </div>
+                  );
+                })}
+              </div>
+              {items.length > 8 && (
+                <div className="px-4 py-2 border-t text-[11px] text-stone-500" style={{ borderColor:'#F0EAE0' }}>
+                  + {items.length - 8} autre{items.length - 8 > 1 ? 's' : ''} article{items.length - 8 > 1 ? 's' : ''}
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+
+        {/* Fournisseurs — replaces the former Fournisseurs tab */}
+        <Card className="overflow-hidden">
+          <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor:'#F0EAE0' }}>
+            <div className="flex items-center gap-2">
+              <Icons.Bank size={14} className="text-stone-500"/>
+              <h3 className="font-bold text-sm">Fournisseurs</h3>
+              <span className="text-[10px] text-stone-500 tabular-nums">{suppliers.length}</span>
+            </div>
+            <Btn size="sm" variant="primary" icon={<Icons.Plus size={11}/>} onClick={() => onAdd('supplier')}>Fournisseur</Btn>
+          </div>
+          {suppliers.length === 0 ? (
+            <EmptyState icon={<Icons.Bank size={20}/>} title="Aucun fournisseur" hint="Ajoutez un fournisseur pour l'associer à vos articles et achats."/>
+          ) : (
+            <>
+              <div className="divide-y" style={{ borderColor:'#F0EAE0' }}>
+                {suppliers.slice(0, 6).map(s => {
+                  const purchaseCount = purchases.filter(p => p.supplier === s.id).length;
+                  return (
+                    <div key={s.id} onClick={() => onEdit('supplier', s)}
+                         className="px-4 py-2 flex items-center gap-3 cursor-pointer hover:bg-stone-50"
+                         style={{ borderColor:'#F0EAE0' }}
+                         title="Cliquer pour modifier">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold text-sm truncate">{s.name}</div>
+                        <div className="text-[10px] text-stone-500 truncate">{s.city || s.type || '—'}</div>
+                      </div>
+                      <div className="text-right text-[10px] text-stone-500 tabular-nums" style={{ minWidth: 60 }}>
+                        {purchaseCount} achat{purchaseCount > 1 ? 's' : ''}
+                      </div>
+                      <Icons.Edit size={12} className="text-stone-300 flex-shrink-0"/>
+                    </div>
+                  );
+                })}
+              </div>
+              {suppliers.length > 6 && (
+                <div className="px-4 py-2 border-t text-[11px] text-stone-500" style={{ borderColor:'#F0EAE0' }}>
+                  + {suppliers.length - 6} autre{suppliers.length - 6 > 1 ? 's' : ''}
+                </div>
+              )}
+            </>
+          )}
         </Card>
       </div>
     </div>
