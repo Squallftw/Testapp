@@ -1,0 +1,30 @@
+-- BatiTrack — Migration 0005 — Fix infinite recursion on tasks RLS
+--
+-- Background:
+--   In 0001 we defined `tasks_select_worker_assigned` to let a worker SELECT
+--   their assigned tasks. That policy does:
+--     exists (select 1 from public.task_assignments where ...)
+--   The SELECT on task_assignments evaluates the table's policies — which
+--   include `task_assignments_write_manager` (a `FOR ALL` policy whose
+--   `using` clause applies to SELECT). That policy does:
+--     exists (select 1 from public.tasks t where ...)
+--   ↓
+--   tasks → task_assignments → tasks → task_assignments → ...
+--   Postgres raises "infinite recursion detected in policy for relation
+--   'tasks'" as soon as the loop fires.
+--
+-- Resolution:
+--   Drop `tasks_select_worker_assigned`. The worker self-service UI for
+--   planning is post-beta; without it, no UI consumer reads a worker-scoped
+--   task list, so dropping the policy has no functional impact today. When
+--   the mobile worker UI ships, re-add it as a wrapper around a SECURITY
+--   DEFINER helper (e.g. `app.task_is_assigned_to_caller(uuid)`) so the
+--   cross-table read bypasses RLS and breaks the loop.
+--
+--   After this drop, the remaining tasks SELECT policies are:
+--     - tasks_select_admin
+--     - tasks_select_manager
+--   Neither queries task_assignments, so `task_assignments_write_manager`'s
+--   subquery on tasks no longer triggers a cross-table policy chain.
+
+drop policy if exists tasks_select_worker_assigned on public.tasks;

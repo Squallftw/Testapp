@@ -18,6 +18,7 @@ any are missing (member-list and purchase-creation just fail) but **migration
 - ⏳ `supabase/migrations/0002_member_management.sql` — members RPCs + last-owner trigger
 - ⏳ `supabase/migrations/0003_consumables_views.sql` — purchase RPC + stock-on-hand view
 - ⏳ `supabase/migrations/0004_tasks_rpcs.sql` — task + assignment RPCs (Planning)
+- ⏳ `supabase/migrations/0005_fix_tasks_rls_recursion.sql` — breaks an RLS loop on the tasks table that fires whenever task_assignments rows exist (required as soon as you create any task with an assignee)
 
 ---
 

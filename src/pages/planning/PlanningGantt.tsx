@@ -451,10 +451,18 @@ function TaskRowLabel({ row, height, onToggle, onClick }: TaskRowLabelProps) {
       <button
         type="button"
         onClick={onClick}
-        className="flex-1 text-left truncate px-1 py-0.5 rounded hover:text-bati-teal"
+        className="flex-1 min-w-0 text-left truncate px-1 py-0.5 rounded hover:text-bati-teal"
       >
         {task.label}
       </button>
+      {task.duration_days != null && task.duration_days > 0 && (
+        <span
+          className="ml-2 px-1.5 py-0.5 rounded bg-bati-border-soft text-[10px] font-medium tabular-nums text-bati-muted flex-shrink-0"
+          title={`Durée : ${task.duration_days} jour${task.duration_days > 1 ? 's' : ''}`}
+        >
+          {task.duration_days} j
+        </span>
+      )}
       <span
         className="ml-2 mr-2 w-1.5 h-1.5 rounded-full flex-shrink-0"
         style={{ background: TASK_STATUS_COLOR[task.status].bar }}

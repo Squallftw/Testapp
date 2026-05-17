@@ -8,11 +8,13 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { toast } from '@/components/ui/Toast';
 import { formatMAD, formatDate } from '@/lib/format';
+import { PlanningView } from '@/pages/planning/PlanningView';
 
-type Tab = 'overview' | 'pointage' | 'consommables' | 'budget';
+type Tab = 'overview' | 'planning' | 'pointage' | 'consommables' | 'budget';
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'overview', label: 'Vue d\'ensemble' },
+  { id: 'planning', label: 'Planning' },
   { id: 'pointage', label: 'Pointage' },
   { id: 'consommables', label: 'Consommables' },
   { id: 'budget', label: 'Budget' },
@@ -177,6 +179,8 @@ export default function ChantierDetailPage() {
           </InfoCard>
         </div>
       )}
+
+      {tab === 'planning' && <PlanningView chantierId={c.id} />}
 
       {tab === 'pointage' && (
         <TabPlaceholder
