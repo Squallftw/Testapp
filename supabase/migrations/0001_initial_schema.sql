@@ -487,6 +487,10 @@ $$;
 
 -- Audit writer. SECURITY DEFINER so it bypasses RLS on audit_log
 -- (the audit_log has NO insert policy — only triggers may write).
+--
+-- Reads org_id from the row's JSONB representation rather than hard-coded
+-- column refs, because the `organizations` table has no `org_id` column
+-- (the row's own `id` IS the org_id). Special-cased explicitly below.
 create or replace function app.write_audit() returns trigger
 language plpgsql security definer set search_path = public, app as $$
 declare
@@ -495,20 +499,27 @@ declare
   v_id   uuid;
   v_before jsonb;
   v_after  jsonb;
+  v_row    jsonb;
 begin
   if tg_op = 'DELETE' then
     v_before := to_jsonb(old);
+    v_row    := v_before;
     v_id     := old.id;
-    v_org    := old.org_id;
   elsif tg_op = 'UPDATE' then
     v_before := to_jsonb(old);
     v_after  := to_jsonb(new);
+    v_row    := v_after;
     v_id     := new.id;
-    v_org    := new.org_id;
   else  -- INSERT
     v_after  := to_jsonb(new);
+    v_row    := v_after;
     v_id     := new.id;
-    v_org    := new.org_id;
+  end if;
+
+  if tg_table_name = 'organizations' then
+    v_org := v_id;
+  else
+    v_org := (v_row ->> 'org_id')::uuid;
   end if;
 
   insert into public.audit_log (org_id, user_id, action, entity_type, entity_id, before, after)
