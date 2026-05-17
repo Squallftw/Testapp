@@ -1,142 +1,195 @@
-# Batitrack
+# BatiTrack
 
 Suivi des coûts main d'œuvre · construction Maroc.
-React (in-browser) + Supabase (auth + database) — déployable sur GitHub Pages.
+Vite + React 18 + TypeScript + Supabase (Postgres, Auth, RLS) — déployable sur GitHub Pages ou tout hébergeur statique.
+
+> **Statut** : migration en cours d'une version mono-utilisateur (blob JSONB)
+> vers une architecture multi-tenant relationnelle. Voir [MIGRATION_PLAN.md](MIGRATION_PLAN.md)
+> pour la feuille de route et l'état d'avancement.
 
 ---
 
-## Démarrage rapide
+## Démarrage local
 
-### 1. Préparer Supabase
+### Prérequis
 
-1. Aller dans votre projet Supabase ([yaarnpduwcsmrxmrhrvw](https://yaarnpduwcsmrxmrhrvw.supabase.co)).
-2. Ouvrir **SQL Editor → New query**.
-3. Copier-coller le contenu de [`supabase/schema.sql`](supabase/schema.sql) et exécuter.
-4. Dans **Authentication → Providers**, activer **Email**.
-   - Recommandé : laisser *Confirm email* activé pour la production.
-   - Pour des tests rapides, vous pouvez le désactiver temporairement.
-5. Dans **Authentication → URL Configuration**, ajouter votre URL GitHub Pages dans *Site URL* et *Redirect URLs*
-   (par exemple `https://squallftw.github.io/Batitrack/`).
+- Node 20+
+- npm 10+
+- Compte Supabase (gratuit suffit pour le dev)
+- Optionnel : [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
+  pour générer les types TypeScript depuis le schéma.
 
-### 2. Déployer sur GitHub Pages
+### Installation
 
 ```bash
-git clone https://github.com/Squallftw/Batitrack.git
-cd Batitrack
-# Copier les fichiers de ce paquet à la racine du repo
-git add .
-git commit -m "Initial Batitrack deploy"
-git push
+npm install
+cp .env.example .env.local
+# Renseigner VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY (Settings → API)
+npm run dev
 ```
 
-Puis dans **Settings → Pages** du repo : choisir `main` / `/ (root)` comme source.
-L'app sera disponible à `https://squallftw.github.io/Batitrack/Batitrack.html`.
+L'app démarre sur `http://localhost:5173`.
 
-### 3. Lancer en local
-
-Comme l'app utilise `fetch()` pour charger les modules JSX, il faut un serveur HTTP
-(impossible d'ouvrir le fichier en `file://`).
+### Provisionner la base
 
 ```bash
-# Python 3
-python3 -m http.server 8000
-# ou Node
-npx serve .
+# Une seule fois, sur un projet vierge :
+# (depuis le dashboard Supabase → SQL Editor → coller et exécuter)
+supabase/migrations/0001_initial_schema.sql
+
+# Si vous migrez depuis l'ancien blob JSONB, lancez d'abord :
+supabase/migrations/wipe.sql
 ```
 
-Ouvrir `http://localhost:8000/Batitrack.html`.
+Lisez l'en-tête de `wipe.sql` — il efface tous les utilisateurs `auth.users`
+et la table `user_state` héritée.
+
+### Générer les types TypeScript
+
+```bash
+npm run gen:types
+```
+
+Cela appelle `supabase gen types typescript --local` et écrase
+`src/data/database.types.ts`. À refaire après chaque migration de schéma.
+
+---
+
+## Scripts npm
+
+| Script              | Description                                                  |
+|---------------------|--------------------------------------------------------------|
+| `npm run dev`       | Démarre Vite + HMR sur :5173                                 |
+| `npm run build`     | `tsc -b` puis `vite build` → `dist/`                         |
+| `npm run preview`   | Sert `dist/` pour vérifier le build de prod                  |
+| `npm run lint`      | ESLint sur tout `src/`                                       |
+| `npm run format`    | Prettier en mode write                                       |
+| `npm run typecheck` | `tsc -b --noEmit`                                            |
+| `npm test`          | Vitest en mode CI (un seul run)                              |
+| `npm run test:watch`| Vitest en mode watch                                         |
+| `npm run gen:types` | Regénère les types Supabase                                  |
 
 ---
 
 ## Architecture
 
 ```
-Batitrack.html         ← shell, CSP, charge React/Babel/Supabase + bootstrap
+index.html                      ← entrée Vite, CSP injectée à la build
 src/
-  supa.jsx             ← client Supabase, helpers auth, persistence debounce
-  auth-screen.jsx      ← écran Connexion / Inscription / Reset
-  bootstrap.jsx        ← séquence de démarrage (auth → load user state → load app)
-  data.jsx             ← seeds (démo) + branchement user_data
-  consommables-data.jsx
-  planning.jsx
-  app.jsx              ← composant racine + persistence orchestration
-  ... (autres modules React)
+  main.tsx                      ← bootstrap React + ErrorBoundary
+  App.tsx                       ← composant racine
+  index.css                     ← Tailwind + variables CSS BatiTrack
+  vite-env.d.ts                 ← types Vite (import.meta.env)
+  lib/
+    error-boundary.tsx
+  data/                         ← couche d'accès aux données (DAL)
+    client.ts                   ← singleton Supabase + org actif
+    errors.ts                   ← DALError + sous-classes + mappers
+    database.types.ts           ← généré par supabase gen types
+    index.ts                    ← barrel
+    {orgs,chantiers,workers,...}.ts
+  pages/                        ← (à venir : pages liées au router)
+  components/                   ← (à venir : composants partagés)
 supabase/
-  schema.sql           ← tables, RLS, triggers, grants
-SECURITY.md            ← détails du durcissement
+  migrations/
+    0001_initial_schema.sql     ← schéma relationnel complet
+    wipe.sql                    ← destructif — efface l'ancien blob
+  tests/                        ← tests RLS, rôles, lint SQL (à venir)
+.github/workflows/
+  deploy.yml                    ← install → lint → test → build → GH Pages
 ```
 
-### Flux d'authentification
+### Flux d'authentification (cible)
 
-1. Au chargement, `bootstrap.jsx` interroge Supabase pour une session active.
-2. Pas de session → l'écran **Connexion / Inscription** est rendu.
-3. Login réussi → un splash s'affiche pendant qu'on charge la ligne `user_state`
-   correspondante (créée automatiquement à l'inscription par un trigger Postgres).
-4. Les données utilisateur sont injectées dans `window.__BATI_USER_DATA`,
-   puis chaque module React est chargé dynamiquement et lit cet objet.
-5. À chaque mutation, l'application met à jour son blob JSONB local et le
-   sauvegarde dans Supabase (debounce 1,2 s, force à 8 s, save sur `pagehide`).
+1. `main.tsx` initialise le client Supabase via `initSupabase()` à partir de
+   `import.meta.env.VITE_SUPABASE_*`.
+2. `OrgContext` interroge `orgs.listMyOrgs()` ; si l'utilisateur a plusieurs
+   organisations, un sélecteur s'affiche dans la topbar.
+3. L'org actif est mémorisé en `user_preferences`. Les appels DAL le résolvent
+   automatiquement via `getActiveOrgId()`.
+4. Toutes les requêtes passent par `src/data/*` ; un composant qui appelle
+   directement `supabase.from()` est rejeté par ESLint.
 
-### Pourquoi un seul blob JSONB ?
+### Modèle relationnel
 
-Plutôt qu'une table par entité (chantiers, ouvriers, pointage, etc.) on stocke
-toute la donnée d'un utilisateur dans une ligne JSONB unique :
+24 tables business + audit + préférences. Voir
+[MIGRATION_PLAN.md § Entities](MIGRATION_PLAN.md#entities) pour la liste,
+et `supabase/migrations/0001_initial_schema.sql` pour la DDL complète.
 
-- Une seule policy RLS à valider, donc peu de surface d'attaque.
-- Chaque utilisateur est complètement isolé.
-- Refactor minimal du code React existant (pas de migration éclatée).
-- Suffisant pour le testing client. Une refonte relationnelle pourra suivre
-  une fois le périmètre stabilisé.
+Toutes les sommes en `numeric(14, 2)`. Soft-delete via `deleted_at`. RLS
+activée partout. Audit log peuplé par triggers Postgres — jamais par le client.
 
-Limite serveur : 4 MiB par utilisateur (modifiable dans le schema).
+### Permissions
+
+| Rôle           | Périmètre |
+|----------------|-----------|
+| `owner`        | Tout dans son org. Gestion de l'org elle-même + invitations. |
+| `admin`        | Tout sauf modifier/supprimer l'org. |
+| `site_manager` | Lecture org-wide sur ouvriers / matériel / consommables ; écriture limitée à ses chantiers assignés. |
+| `worker`       | Lecture seule de ses propres pointages et tâches assignées. Pas d'accès aux prix. |
+
+Détail dans [MIGRATION_PLAN.md § Permission matrix](MIGRATION_PLAN.md#permission-matrix).
 
 ---
 
-## Données pour nouveaux utilisateurs
+## Déploiement
 
-Chaque inscription crée une ligne `user_state` avec `data = '{}'` (vide).
-Toutes les listes — chantiers, ouvriers, matériels, consommables, planning —
-démarrent vides. L'utilisateur les remplit lui-même via l'UI.
+### GitHub Pages (par défaut)
 
-Pour visualiser l'app avec des données de démo, on peut activer un mode démo
-en ajoutant `?demo=1` à l'URL (à implémenter côté UI si besoin) ou en posant
-manuellement `window.__BATI_DEMO_MODE = true` avant le chargement.
+`.github/workflows/deploy.yml` se déclenche sur push vers `main` :
+
+1. `npm ci`
+2. `npm run lint`
+3. `npm test`
+4. `npm run build` (avec `VITE_SUPABASE_*` injectés depuis les secrets du repo)
+5. `dist/` publié sur GitHub Pages.
+
+Si le repo s'appelle `Batitrack` et que l'URL cible est
+`https://<user>.github.io/Batitrack/`, changer `base: '/'` en
+`base: '/Batitrack/'` dans `vite.config.ts`.
+
+### Headers HTTP en production
+
+GitHub Pages ne définit pas les headers HTTP. Le CSP est donc injecté via
+`<meta http-equiv>` (voir `vite.config.ts`). Pour une mise en production
+sérieuse, déployez derrière Cloudflare Pages / Vercel / Netlify et ajoutez :
+
+```
+Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+X-Frame-Options: DENY
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+```
+
+---
+
+## Tests
+
+- **Unitaires** (Vitest) : `npm test`
+- **RLS** (pgTAP) : à venir — `supabase test db` contre une base de test
+  conteneurisée. Voir `supabase/tests/rls/`.
+- **E2E** (Playwright) : sont dans le repo voisin
+  `Batitrack-tests/e2e-playwright/`. Seront mis à jour à mesure que les
+  feature ports atterrissent.
 
 ---
 
 ## Sécurité
 
-Voir [`SECURITY.md`](SECURITY.md) pour le détail du durcissement.
-En résumé pour la phase de test :
+Voir [SECURITY.md](SECURITY.md). En résumé :
 
-- **RLS** active sur toutes les tables, isole chaque utilisateur.
-- **CSP stricte** sur le HTML — seuls les CDN listés peuvent injecter du JS.
-- **SRI** sur les scripts React et Babel (vérifie l'intégrité du CDN).
-- **Validation** côté client (email, password ≥ 8 chars, longueurs bornées) +
-  contraintes côté serveur.
-- **Audit log** append-only (insert seulement, jamais update/delete).
-- **Session** stockée en `localStorage`, refresh auto, déconnexion forcée
-  après 8 h d'inactivité.
-- **Clé publique** Supabase exposée dans le code — c'est la pratique
-  recommandée, la sécurité repose entièrement sur les policies RLS.
-- ⚠ **Ne JAMAIS** publier la clé `service_role` côté client.
-
----
-
-## Désinscription
-
-Supabase ne supprime pas automatiquement les comptes. Pour supprimer un
-utilisateur de test, aller dans **Authentication → Users** et supprimer.
-Le trigger `on delete cascade` retire automatiquement sa ligne `user_state`
-et son `audit_log`.
-
----
-
-## Mises à jour & versions
-
-`schema_ver` est stocké dans chaque ligne `user_state`. Si vous changez le
-schéma JSON de l'app, incrémentez cette valeur dans le code et ajoutez une
-migration côté front pour mettre à jour les anciennes données au chargement.
+- **RLS** sur 100 % des tables ; politiques par rôle (owner / admin /
+  site_manager / worker).
+- **CSP strict** en prod (pas de `'unsafe-eval'`, pas d'inline scripts).
+- **Audit log** append-only, peuplé par triggers Postgres en mode `SECURITY
+  DEFINER`.
+- **Money** en `numeric(14, 2)` partout ; lint SQL en CI refuse les types
+  flottants.
+- **Soft-delete-aware unique indexes** (un membre révoqué peut être réinvité).
+- **`auth.uid()` wrappé en `(select ...)`** dans les policies pour
+  optimisation du planificateur Postgres.
+- **`SECURITY DEFINER`** sur les helpers de policy, avec `revoke from public`
+  explicite et `set search_path` pour bloquer les attaques de search-path.
 
 ---
 

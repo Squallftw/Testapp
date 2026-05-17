@@ -1,179 +1,259 @@
-# Batitrack — Security hardening
+# BatiTrack — Sécurité
 
-Ce document décrit les mesures de sécurité appliquées à la version courante,
-adaptée à une phase de test client. Une checklist *production* est en fin de
-fichier — à appliquer avant tout déploiement réel.
+Ce document décrit le modèle de sécurité de la nouvelle architecture
+multi-tenant (Vite + Postgres relationnel + RLS). Pour l'ancienne version
+mono-utilisateur (blob JSONB + Babel-in-browser), voir l'historique git.
 
 ---
 
 ## 1. Authentification
 
-- **Email + mot de passe** via Supabase Auth, flow PKCE.
-- **Mot de passe** : minimum 8 caractères, au moins une lettre et un chiffre.
-  Maximum 128 caractères pour limiter les abus.
-- **Email** : validation regex + cap à 254 caractères (RFC 5321).
-- **Confirmation email** : activée par défaut côté Supabase (recommandé).
-  Désactivable pendant les tests pour fluidifier les essais.
-- **Réinitialisation** : lien envoyé par email, n'expose jamais si l'email
-  existe ou non.
-- **Session** : stockée en `localStorage` sous `batitrack.auth`, refresh
-  automatique des tokens via le SDK.
-- **Déconnexion forcée** : 8 heures d'inactivité → `signOut()` automatique.
+- **Supabase Auth** (Postgres + GoTrue), email/mot de passe avec flux PKCE.
+- **Mot de passe** : minimum 8 caractères. Les paramètres précis (longueur,
+  complexité, leak detection) sont configurés côté Supabase Dashboard
+  → Authentication → Policies.
+- **Email** : confirmation activée par défaut.
+- **Réinitialisation** : lien magique envoyé par email — n'expose pas
+  l'existence du compte.
+- **Session** : refresh automatique des tokens via le SDK, stockée en
+  `localStorage` sous une clé identifiable.
 
-> Côté Supabase, activez en plus dans le dashboard :
-> - **Rate limiting** sur `/auth` (déjà activé par défaut, vérifiez les seuils).
-> - **CAPTCHA** (hCaptcha / Cloudflare Turnstile) sur l'inscription si du trafic
->   public est attendu — non activé ici car testing.
-
----
-
-## 2. Row-Level Security
-
-Toutes les tables exposées via PostgREST ont **RLS activée** et leurs policies
-contraignent `auth.uid() = user_id`. Voir `supabase/schema.sql`.
-
-| Table        | SELECT  | INSERT  | UPDATE  | DELETE  |
-|--------------|---------|---------|---------|---------|
-| `user_state` | ✅ self | ✅ self | ✅ self | ✅ self |
-| `audit_log`  | ✅ self | ✅ self | ❌      | ❌      |
-
-L'audit log est append-only : aucune policy d'UPDATE/DELETE, donc même un
-client compromis ne peut pas réécrire l'historique. Les administrateurs
-peuvent encore tout voir/modifier via le dashboard Supabase (service_role).
+> À activer côté Supabase pour la prod :
+> - **Rate limiting** sur `/auth` (vérifier les seuils).
+> - **CAPTCHA** (hCaptcha / Cloudflare Turnstile) sur l'inscription si du
+>   trafic public est attendu.
+> - **Leaked password protection** (HaveIBeenPwned).
+> - **MFA** sur les comptes owner.
 
 ---
 
-## 3. Surface réseau
+## 2. Multi-tenant + Row-Level Security
 
-### Content Security Policy
+Toutes les tables business ont **RLS activée**. Le périmètre est défini par
+les memberships : un utilisateur peut être membre actif de N organisations,
+chacune avec un rôle (`owner` / `admin` / `site_manager` / `worker`).
 
-Dans `Batitrack.html` :
+### Modèle de policy
+
+Chaque table a typiquement 2–4 policies OR-combinées, par rôle. Exemple
+pour `attendance` :
+
+```sql
+-- owner/admin : tout dans leur org
+create policy attendance_select_admin on public.attendance
+  for select to authenticated
+  using (app.user_role_in_org(org_id) in ('owner', 'admin'));
+
+-- site_manager : seulement chantiers assignés
+create policy attendance_select_manager on public.attendance
+  for select to authenticated
+  using (
+    app.user_role_in_org(org_id) = 'site_manager'
+    and app.user_has_chantier(chantier_id)
+  );
+
+-- worker : seulement ses propres lignes
+create policy attendance_select_worker on public.attendance
+  for select to authenticated
+  using (worker_id = app.user_worker_id_in_org(org_id));
+```
+
+### Matrice de permissions
+
+| Action                                | owner | admin | site_manager     | worker        |
+|---------------------------------------|-------|-------|------------------|---------------|
+| Gérer l'organisation                  | ✅    | ❌    | ❌                | ❌            |
+| Inviter / révoquer des utilisateurs   | ✅    | ✅    | ❌                | ❌            |
+| Créer / modifier un chantier          | ✅    | ✅    | ❌                | ❌            |
+| Voir un chantier                      | ✅    | ✅    | assignés seul.   | ❌            |
+| Créer / modifier le pointage          | ✅    | ✅    | chantiers assig. | ❌ (MVP)      |
+| Voir son pointage + ses labor_entries | n/a   | n/a   | n/a              | ✅            |
+| Voir le coût main d'œuvre (avec prix) | ✅    | ✅    | assignés         | ❌            |
+| Voir son propre `daily_rate`          | n/a   | n/a   | n/a              | ✅            |
+| Gérer ouvriers / fournisseurs / items | ✅    | ✅    | ✅                | ❌            |
+| Créer achats / consommation / transferts | ✅ | ✅    | ses chantiers    | ❌            |
+| Voir les prix sur consommables        | ✅    | ✅    | ✅                | ❌            |
+| Voir / modifier le planning           | ✅    | ✅    | ses chantiers    | tâches assig. |
+| Voir l'audit log                      | ✅    | ✅    | ❌                | ❌            |
+
+Détail : `supabase/migrations/0001_initial_schema.sql` § « policies ».
+
+### Helpers de policy
+
+Quatre fonctions `SECURITY DEFINER` dans le schéma `app/` :
+
+- `app.user_orgs()` — org_ids actifs du caller
+- `app.user_role_in_org(org_id)` — rôle dans une org donnée
+- `app.user_has_chantier(chantier_id)` — autorisation chantier (owner/admin
+  automatique, site_manager via `chantier_assignments`)
+- `app.user_worker_id_in_org(org_id)` — worker.id lié à l'utilisateur
+
+Toutes en `SECURITY DEFINER` avec `set search_path = public` (parade
+contre les attaques de search-path), `revoke execute from public`, et
+`grant execute to authenticated`.
+
+### Optimisation
+
+`auth.uid()` est wrappé en `(select auth.uid())` dans toutes les policies
+qui le comparent directement. Postgres évalue alors la fonction une seule
+fois par requête au lieu d'une fois par ligne — gain matériel sur les
+tables volumineuses ([source officielle Supabase](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select)).
+
+---
+
+## 3. Audit log
+
+- Table `audit_log` : append-only via RLS (aucune policy `UPDATE`/`DELETE`).
+- Peuplée par des triggers Postgres `AFTER INSERT/UPDATE/DELETE` sur chaque
+  table business. Trigger en `SECURITY DEFINER` → contourne RLS pour
+  insérer, mais ne contourne pas les contraintes d'intégrité.
+- Capture : `org_id`, `user_id` (via `auth.uid()` au moment du trigger),
+  `action`, `entity_type`, `entity_id`, `before` (jsonb), `after` (jsonb),
+  `ip`, `user_agent`, `created_at`.
+- Owner/admin peuvent lire (`audit_log_select`). Ni l'utilisateur ni
+  l'admin ne peut modifier ou supprimer une entrée.
+- À long terme (> 1 M lignes / > 5 Go) : partitionner par mois via
+  `pg_partman` ; commentaire en place dans le schéma.
+
+---
+
+## 4. Surface réseau
+
+### Content Security Policy (production)
 
 ```
 default-src 'self';
-script-src  'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.tailwindcss.com https://cdn.jsdelivr.net;
-style-src   'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net;
-font-src    'self' https://fonts.gstatic.com data:;
-img-src     'self' data: blob: https://*.supabase.co;
+script-src 'self';
+style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+font-src 'self' https://fonts.gstatic.com data:;
+img-src 'self' data: blob: https://*.supabase.co;
 connect-src 'self' https://*.supabase.co wss://*.supabase.co;
 frame-ancestors 'none';
-base-uri    'self';
+base-uri 'self';
 form-action 'self';
-object-src  'none';
+object-src 'none';
+upgrade-insecure-requests;
 ```
 
-- `frame-ancestors 'none'` empêche le clickjacking (l'app ne peut être
-  intégrée dans aucun iframe externe).
-- `connect-src` limite les requêtes XHR/fetch à votre instance Supabase
-  (HTTP + WebSocket pour realtime).
-- `object-src 'none'` neutralise `<embed>` / `<object>` / `<applet>`.
-- `'unsafe-eval'` est requis par le compilateur Babel en navigateur. À retirer
-  lorsque vous précompilerez le JSX (voir section production).
-- `'unsafe-inline'` est nécessaire pour les styles Tailwind dynamiques et les
-  scripts inline générés par Babel.
+Plus de `'unsafe-eval'`, plus de `'unsafe-inline'` sur les scripts. Vite
+build produit du JS pré-compilé, hashé, chargé en `<script type="module">`.
 
-### Headers complémentaires (méta)
+Le CSP est injecté à la build par un plugin Vite (`inject-csp` dans
+`vite.config.ts`). En dev, un CSP relaxé est utilisé pour le HMR ; il
+n'est jamais déployé.
 
-- `X-Content-Type-Options: nosniff` — empêche le MIME sniffing.
-- `referrer-policy: strict-origin-when-cross-origin`.
-- `noindex,nofollow` — l'app n'est pas indexée par les moteurs.
+### Headers complémentaires
 
-> **Important** : si vous hébergez sur GitHub Pages, ces meta-tags sont la
-> seule option car GHP ne permet pas de headers HTTP custom. Pour une vraie
-> prod, déployez derrière un proxy (Cloudflare Pages, Vercel, Netlify) et
-> définissez les headers HTTP côté serveur. Ajoutez en plus :
-> ```
-> Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
-> X-Frame-Options: DENY
-> Permissions-Policy: camera=(), microphone=(), geolocation=()
-> ```
+- `X-Content-Type-Options: nosniff` (meta) — empêche le MIME sniffing.
+- `referrer-policy: strict-origin-when-cross-origin` (meta).
+- `noindex,nofollow` (meta).
+
+Sur GitHub Pages, les headers HTTP additionnels ne sont pas possibles.
+Quand l'app passe derrière Cloudflare Pages / Vercel / Netlify, ajouter :
+
+```
+Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+X-Frame-Options: DENY
+Permissions-Policy: camera=(), microphone=(), geolocation=()
+```
 
 ### Subresource Integrity
 
-Les scripts CDN versionnés ont un hash SRI :
-- `react@18.3.1` ✅
-- `react-dom@18.3.1` ✅
-- `@babel/standalone@7.29.0` ✅
-- `@supabase/supabase-js@2.45.4` ❓ (le bundle UMD officiel publie un hash
-  par version — ajoutez-le quand la version est figée pour la prod).
-
-`cdn.tailwindcss.com` est un script *runtime* qui ne supporte pas SRI ; il
-est restreint par la CSP. À remplacer par un build Tailwind statique en prod.
+Plus pertinent une fois les CDN externes retirés (React/Babel partis avec
+la migration Vite). Les seules ressources externes restantes sont les
+Google Fonts (CSS rotatif → pas de SRI possible). À reconsidérer si on
+self-host les polices.
 
 ---
 
-## 4. Validation & contraintes côté serveur
+## 5. Validation & contraintes
 
-- `octet_length(data) < 4 MiB` sur `user_state.data` — bloque l'envoi de blobs
-  démesurés depuis un client compromis.
-- `char_length(action) <= 64`, `entity <= 64`, `label <= 512` sur `audit_log`.
-- `revoke all from anon` — le rôle anonyme ne peut RIEN faire.
-- `grant ... to authenticated` — seuls les comptes authentifiés ont accès.
-
-Côté client :
-- Tous les inputs ont `maxLength` HTML.
-- L'email est trimmé avant envoi.
-- Les nouveaux objets reçoivent des IDs aléatoires (collisions invraisemblables).
-
----
-
-## 5. Audit & logs
-
-- `audit_log` append-only stocke les mutations significatives. À utiliser
-  pour les actions sensibles (création de paiement, clôture de quinzaine,
-  changement de tarif).
-- Côté front, un journal d'audit *local* (state React) capture les éditions
-  rétroactives ; il est persisté dans le blob et donc dans Supabase.
-- Les `console.error` côté front ne contiennent jamais le mot de passe ni
-  les jetons.
+- **Argent** partout en `numeric(14, 2)`. Pas de flottants — un test SQL en
+  CI rejette `real` / `float` / `double precision`.
+- **`qty > 0`** sur consumption, transfers, adjustments, purchase_lines.
+- **`amount > 0`** sur chantier_payments.
+- **`end_date >= start_date`** sur materiel_deployments.
+- **Soft-delete-aware unique indexes** sur memberships et chantier_assignments
+  — pas de blocage pour réinscrire un membre révoqué.
+- **`revoke insert/update/delete on audit_log from authenticated`** —
+  seuls les triggers (SECURITY DEFINER) peuvent insérer.
+- **`anon`** n'a aucun grant — tout accès nécessite un JWT authentifié.
 
 ---
 
-## 6. Données personnelles
+## 6. DAL et garde-fous ESLint
+
+Toutes les requêtes Supabase passent par `src/data/*.ts`. Un composant qui
+appelle directement `supabase.from()` est rejeté par ESLint via la règle
+`no-restricted-syntax` (exception : fichiers `src/data/**`). Tracé dans
+`eslint.config.js`.
+
+Chaque DAL helper :
+
+- Résout `org_id` via `getActiveOrgId()` (jamais accepté en paramètre).
+- Filtre `deleted_at IS NULL` implicitement.
+- Retourne des objets JS, jamais le wrapper Supabase brut.
+- Lance des erreurs typées (`NotFoundError`, `PermissionError`,
+  `ValidationError`, `NetworkError`, `ConflictError`).
+
+---
+
+## 7. Secrets & environnement
+
+- `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` : safe à exposer côté
+  client. RLS fait le travail. Voir `.env.example`.
+- `SUPABASE_SERVICE_ROLE_KEY` : **JAMAIS** dans le repo, jamais en variable
+  d'env client. Réservé aux Edge Functions / scripts d'admin.
+- GitHub Actions secrets : configurer `VITE_SUPABASE_URL` et
+  `VITE_SUPABASE_ANON_KEY` dans Settings → Secrets and variables → Actions.
+
+---
+
+## 8. Données personnelles (RGPD / Loi 09-08)
 
 L'app stocke :
-- email utilisateur (compte Supabase),
-- noms / téléphones / CIN des ouvriers (entré par l'utilisateur lui-même),
-- coordonnées des clients & fournisseurs (idem).
 
-Ces données restent strictement dans la ligne `user_state` de l'utilisateur
-qui les a saisies, isolée par RLS. Aucun partage inter-utilisateurs.
+- email utilisateur (compte Supabase)
+- noms / téléphones / CIN des ouvriers
+- coordonnées clients & fournisseurs
 
-> **RGPD / loi 09-08** : pour une vraie prod, ajouter dans le UI :
-> - une page de politique de confidentialité,
-> - un export JSON ("Télécharger mes données"),
-> - une suppression de compte ("Supprimer mon compte" → `delete from auth.users`).
+Toutes ces données sont scoping par `org_id`. Aucun partage inter-org.
+Aucun partage inter-membre au-delà des règles RLS ci-dessus.
 
----
+À faire avant production :
 
-## 7. Bonnes pratiques opérationnelles
-
-- ⚠ **Clé `service_role`** : ne JAMAIS la mettre dans le code client.
-  Elle est utilisable uniquement depuis un serveur (Edge Function, backend).
-- ⚠ La clé `publishable` (`sb_publishable_…`) est destinée à être publique ;
-  elle est dans le code à dessein. La sécurité repose sur RLS.
-- Activez **2FA** sur votre compte Supabase admin.
-- Faites des **backups** réguliers (Settings → Database → Backups).
-- Si vous suspectez une compromission, faites tourner les clés via le
-  dashboard et redéployez.
+- Page **politique de confidentialité** dans l'UI.
+- Export JSON « Télécharger mes données » (par utilisateur).
+- Suppression de compte (« Supprimer mon compte » → `delete from auth.users` ;
+  le cascade RLS gère ses memberships).
 
 ---
 
-## 8. Checklist avant production
+## 9. Tests RLS (cross-tenant)
 
-- [ ] Précompiler le JSX (esbuild / vite) → retirer `'unsafe-eval'`.
-- [ ] Remplacer le runtime Tailwind par un build CSS statique.
-- [ ] Activer la confirmation email + un provider SMTP fiable.
-- [ ] Ajouter CAPTCHA sur signup et reset.
-- [ ] Politiser : *Site URL* et *Redirect URLs* précis (pas de wildcard).
-- [ ] Headers HTTP (HSTS, X-Frame-Options, Permissions-Policy) via proxy.
-- [ ] Précompiler les fichiers .jsx en .js et virer Babel du HTML.
-- [ ] Audit log : envoyer aussi les évènements critiques côté serveur via une
-      Edge Function (`audit_log` insert).
-- [ ] Tests d'intrusion sur les policies RLS (`SELECT` cross-tenant doit échouer).
-- [ ] Renouveler les clés Supabase périodiquement.
-- [ ] Activer la **Vault** Supabase pour stocker tout secret métier.
+`supabase/tests/rls/*.sql` (à venir, pgTAP) : pour chaque table business,
+asserte qu'un utilisateur de l'org A ne peut **rien** faire sur l'org B
+(SELECT, INSERT, UPDATE, DELETE). Une policy manquante = un échec de test.
+
+`supabase/tests/roles/*.sql` (à venir) : asserte la matrice de permissions
+ci-dessus.
+
+`supabase/tests/lint/money_types.sql` (à venir) : scan
+`information_schema.columns`, rejette tout type flottant hors whitelist.
 
 ---
 
-*Document mis à jour : version 1.0 — testing client.*
+## 10. Checklist avant production
+
+- [ ] Domaine custom (HTTPS forcé, HSTS preload submis).
+- [ ] Headers HTTP via proxy (HSTS, X-Frame-Options, Permissions-Policy).
+- [ ] CAPTCHA sur signup + reset.
+- [ ] MFA obligatoire pour les rôles owner.
+- [ ] Confirmation email activée, provider SMTP fiable.
+- [ ] Activer **Supabase Vault** pour tout secret métier.
+- [ ] Tests RLS cross-tenant passants en CI.
+- [ ] Migration test workflow : appliquer `0001_initial_schema.sql` sur une
+      base vierge en CI.
+- [ ] Rotation périodique des clés Supabase.
+- [ ] Sauvegardes automatiques (Supabase Dashboard → Database → Backups).
+- [ ] Plan d'incident documenté (qui notifier, dans quel délai).

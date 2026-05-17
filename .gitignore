@@ -4,6 +4,7 @@
 # Local env (never commit secrets)
 .env
 .env.local
+.env.*.local
 
 # Editor
 .vscode/
@@ -13,13 +14,26 @@
 dist/
 build/
 
-# Screenshots used during development
-screenshots/
-*.png.tmp
-
-# Versioned local copies
-Batitrack-source.html
-"Batitrack (standalone).html"
-
-# Node modules — if anyone adds tooling later
+# Node
 node_modules/
+
+# Vite
+.vite/
+dist-ssr/
+*.local
+
+# Logs / coverage
+*.log
+coverage/
+.nyc_output/
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Generated outputs from `tsc -b` against tsconfig.node.json
+# (source of truth is vite.config.ts)
+vite.config.js
+vite.config.d.ts
+
+# Claude Code session metadata (local-only)
+.claude/

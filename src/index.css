@@ -1,0 +1,172 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bati-bg: #FAF7F1;
+  --bati-card: #FFFFFF;
+  --bati-border: #E8E2D8;
+  --bati-border-soft: #F0EAE0;
+  --bati-text: #1F2421;
+  --bati-muted: #6B6359;
+  --bati-teal: #0E5460;
+  --bati-teal-soft: #D8E5E7;
+  --bati-terra: #C25B3F;
+  --bati-terra-soft: #F2DCD3;
+  --bati-ochre: #C58122;
+  --bati-success: #2E9152;
+}
+
+html,
+body {
+  font-family: 'Manrope', system-ui, sans-serif;
+  color: var(--bati-text);
+  background: var(--bati-bg);
+}
+
+[dir='rtl'] body {
+  font-family: 'Noto Naskh Arabic', 'Manrope', system-ui, sans-serif;
+}
+
+@layer components {
+  .bati-topbar {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(8px);
+    border-color: var(--bati-border);
+  }
+
+  .bati-sidebar {
+    background: #f5efe3;
+    border-color: var(--bati-border);
+  }
+
+  .bati-nav-active {
+    background: var(--bati-teal);
+    color: #fff;
+  }
+
+  .bati-card {
+    background: var(--bati-card);
+    border: 1px solid var(--bati-border);
+  }
+
+  .bati-input {
+    width: 100%;
+    background: white;
+    border: 1px solid var(--bati-border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .bati-input:focus {
+    outline: none;
+    border-color: var(--bati-teal);
+    box-shadow: 0 0 0 3px rgba(14, 84, 96, 0.1);
+  }
+
+  .bati-grid {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .bati-grid td,
+  .bati-grid th {
+    background: #fff;
+  }
+
+  .bati-grid .bati-sticky-l {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    box-shadow: 1px 0 0 var(--bati-border);
+  }
+
+  .bati-grid .bati-sticky-r {
+    position: sticky;
+    right: 90px;
+    z-index: 2;
+  }
+
+  .bati-grid .bati-sticky-r-2 {
+    position: sticky;
+    right: 0;
+    z-index: 3;
+  }
+
+  .bati-grid-compact .bati-sticky-r {
+    right: 90px;
+  }
+
+  tbody tr:hover .bati-sticky-l {
+    background: #fcfaf6;
+  }
+
+  .bati-motif {
+    background-image:
+      repeating-linear-gradient(45deg, rgba(14, 84, 96, 0.03) 0 2px, transparent 2px 14px),
+      repeating-linear-gradient(-45deg, rgba(14, 84, 96, 0.03) 0 2px, transparent 2px 14px);
+  }
+
+  [dir='rtl'] .bati-grid .bati-sticky-l {
+    left: auto;
+    right: 0;
+    box-shadow: -1px 0 0 var(--bati-border);
+  }
+
+  [dir='rtl'] .bati-grid .bati-sticky-r,
+  [dir='rtl'] .bati-grid .bati-sticky-r-2 {
+    right: auto;
+    left: 0;
+  }
+
+  [dir='rtl'] .bati-grid .bati-sticky-r {
+    left: 90px;
+    right: auto;
+  }
+
+  .bati-table-wrapper {
+    min-width: 100%;
+  }
+
+  .bati-grid td button {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d8d0c2;
+  border-radius: 5px;
+  border: 2px solid #faf7f1;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #b8ae9d;
+}
+
+input,
+select {
+  font-family: inherit;
+}
+
+@keyframes batiFade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+main > div > * {
+  animation: batiFade 0.25s ease-out;
+}
