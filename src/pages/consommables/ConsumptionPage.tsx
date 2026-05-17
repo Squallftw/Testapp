@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -39,7 +40,17 @@ export default function ConsumptionPage() {
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Consumption | null>(null);
-  const [chantierFilter, setChantierFilter] = useState<string>(activeChantierId ?? '');
+  const [searchParams, setSearchParams] = useSearchParams();
+  // URL ?chantier=<id> is the source of truth (so deep-links from chantier-detail
+  // land already-filtered). If absent, fall back to the active chantier context
+  // for users navigating directly to the page.
+  const urlChantier = searchParams.get('chantier');
+  const chantierFilter = urlChantier !== null ? urlChantier : (activeChantierId ?? '');
+  const setChantierFilter = (value: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('chantier', value); // empty string = "all" (overrides context default)
+    setSearchParams(next, { replace: true });
+  };
 
   const consumption = useQuery({
     queryKey: ['consumption', activeOrg?.id, chantierFilter],

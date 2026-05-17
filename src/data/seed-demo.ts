@@ -31,6 +31,7 @@ import {
 } from './consumables';
 import { bulkUpsertAttendance, type UpsertAttendanceInput } from './attendance';
 import { createTask } from './tasks';
+import { createPayment } from './payments';
 
 export const DEMO_NAME_PREFIX = 'Démo · ';
 
@@ -46,6 +47,7 @@ export interface SeedCounts {
   attendance: number;
   consumption: number;
   tasks: number;
+  payments: number;
 }
 
 // ─── helpers ────────────────────────────────────────────────────────────
@@ -89,6 +91,7 @@ export async function seedDemoData(): Promise<SeedCounts> {
     attendance: 0,
     consumption: 0,
     tasks: 0,
+    payments: 0,
   };
 
   // Purchases stock the depot first, then chantiers' consumption draws from it.
@@ -101,6 +104,7 @@ export async function seedDemoData(): Promise<SeedCounts> {
   counts.attendance += atelierStats.attendance;
   counts.consumption += atelierStats.consumption;
   counts.tasks += await seedAtelierPlanning(atelier, workers);
+  counts.payments += await seedAtelierPayments(atelier);
 
   const villa = await createVillaChantier();
   counts.chantiers += 1;
@@ -108,8 +112,50 @@ export async function seedDemoData(): Promise<SeedCounts> {
   counts.attendance += villaStats.attendance;
   counts.consumption += villaStats.consumption;
   counts.tasks += await seedVillaPlanning(villa, workers);
+  counts.payments += await seedVillaPayments(villa);
 
   return counts;
+}
+
+// ─── Payments ───────────────────────────────────────────────────────────
+
+async function seedAtelierPayments(atelier: Chantier): Promise<number> {
+  // Completed chantier: client paid the full 95 000 MAD over three installments.
+  const installments = [
+    { date: isoDaysAgo(85), amount: 28500, ref: 'Acompte 30% — Virement BMCE' },
+    { date: isoDaysAgo(50), amount: 47500, ref: 'Situation intermédiaire 50%' },
+    { date: isoDaysAgo(25), amount: 19000, ref: 'Solde — Chèque LCL 1247' },
+  ];
+  for (const i of installments) {
+    await createPayment({
+      chantier_id: atelier.id,
+      payment_date: i.date,
+      amount: i.amount,
+      reference: i.ref,
+      attachment_url: null,
+      notes: null,
+    });
+  }
+  return installments.length;
+}
+
+async function seedVillaPayments(villa: Chantier): Promise<number> {
+  // Active chantier: client paid acompte + first situation; ~108 000 of 180 000.
+  const installments = [
+    { date: isoDaysAgo(25), amount: 54000, ref: 'Acompte 30% — Virement AWB' },
+    { date: isoDaysAgo(5), amount: 54000, ref: 'Situation 1 — 30% supplémentaire' },
+  ];
+  for (const i of installments) {
+    await createPayment({
+      chantier_id: villa.id,
+      payment_date: i.date,
+      amount: i.amount,
+      reference: i.ref,
+      attachment_url: null,
+      notes: null,
+    });
+  }
+  return installments.length;
 }
 
 interface SharedPool {
@@ -754,6 +800,19 @@ export async function clearDemoData(): Promise<{ deleted: number }> {
   if (chantierIds.length > 0) {
     const { data, error } = await supabase
       .from('consumables_consumption')
+      .update({ deleted_at: nowIso })
+      .eq('org_id', orgId)
+      .in('chantier_id', chantierIds)
+      .is('deleted_at', null)
+      .select('id');
+    if (error) throw mapSupabaseError(error);
+    deleted += data?.length ?? 0;
+  }
+
+  // 4b. Client payments — soft delete by chantier.
+  if (chantierIds.length > 0) {
+    const { data, error } = await supabase
+      .from('chantier_payments')
       .update({ deleted_at: nowIso })
       .eq('org_id', orgId)
       .in('chantier_id', chantierIds)

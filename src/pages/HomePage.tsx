@@ -1,46 +1,211 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { addDays, format, parseISO, subDays } from 'date-fns';
 import { useOrg } from '@/contexts/OrgContext';
+import { listChantiers, type Chantier } from '@/data/chantiers';
+import { listAttendance, type Attendance } from '@/data/attendance';
+import { listWorkers, type Worker } from '@/data/workers';
+import { listItems, listStockOnHand } from '@/data/consumables';
+import { getSummariesForOrg, type BudgetSummary } from '@/data/budget-engine';
+import { listTasksForChantier, type TaskWithAssignments } from '@/data/tasks';
 import { clearDemoData, hasDemoData, seedDemoData } from '@/data/seed-demo';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { toast } from '@/components/ui/Toast';
+import { ChantierScoreCard } from '@/components/dashboard/ChantierScoreCard';
+import { DashboardKpiStrip } from '@/components/dashboard/DashboardKpiStrip';
+import { PausedChantiersStrip } from '@/components/dashboard/PausedChantiersStrip';
+import {
+  ActiveChantiersDetail,
+  AlertsDetail,
+  CashPositionDetail,
+  KpiDetailPanel,
+  PresentTodayDetail,
+  type KpiKey,
+  type LowStockItem,
+  type OverBudgetItem,
+  type OverdueTaskItem,
+} from '@/components/dashboard/KpiDetailPanels';
 
-interface CardProps {
-  title: string;
-  value: React.ReactNode;
-  hint: string;
-  to?: string;
-  accent?: 'teal' | 'terra' | 'ochre' | 'success';
-}
-
-const ACCENT_CLASS: Record<NonNullable<CardProps['accent']>, string> = {
-  teal: 'text-bati-teal',
-  terra: 'text-bati-terra',
-  ochre: 'text-bati-ochre',
-  success: 'text-bati-success',
-};
-
-function Card({ title, value, hint, to, accent = 'teal' }: CardProps) {
-  const body = (
-    <div className="bati-card rounded-lg p-5 h-full flex flex-col justify-between transition-shadow hover:shadow-md">
-      <div className="text-xs uppercase tracking-wide text-bati-muted">{title}</div>
-      <div className={`text-3xl font-bold mt-3 ${ACCENT_CLASS[accent]}`}>{value}</div>
-      <div className="text-xs text-bati-muted mt-3 leading-relaxed">{hint}</div>
-    </div>
-  );
-  if (to) {
-    return (
-      <Link to={to} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-bati-teal rounded-lg">
-        {body}
-      </Link>
-    );
-  }
-  return body;
-}
+const WINDOW_DAYS = 14;
 
 export default function HomePage() {
   const { activeOrg } = useOrg();
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const windowStart = format(subDays(new Date(), WINDOW_DAYS - 1), 'yyyy-MM-dd');
+  const [expandedKpi, setExpandedKpi] = useState<KpiKey | null>(null);
+
+  const days = useMemo(() => {
+    const out: string[] = [];
+    for (let i = 0; i < WINDOW_DAYS; i++) {
+      out.push(format(addDays(parseISO(windowStart), i), 'yyyy-MM-dd'));
+    }
+    return out;
+  }, [windowStart]);
+
+  const [chantiersQ, summariesQ, attendanceQ, workersQ, stockQ, itemsQ] =
+    useQueries({
+      queries: [
+        {
+          queryKey: ['chantiers', activeOrg?.id],
+          queryFn: () => listChantiers(),
+          enabled: !!activeOrg,
+        },
+        {
+          queryKey: ['budget-summaries', activeOrg?.id],
+          queryFn: () => getSummariesForOrg(),
+          enabled: !!activeOrg,
+        },
+        {
+          queryKey: ['attendance', activeOrg?.id, 'window', windowStart, today],
+          queryFn: () =>
+            listAttendance({ dateRange: { start: windowStart, end: today } }),
+          enabled: !!activeOrg,
+        },
+        {
+          queryKey: ['workers', activeOrg?.id],
+          queryFn: () => listWorkers(),
+          enabled: !!activeOrg,
+        },
+        {
+          queryKey: ['stock-on-hand', activeOrg?.id],
+          queryFn: () => listStockOnHand(),
+          enabled: !!activeOrg,
+        },
+        {
+          queryKey: ['consumables-items', activeOrg?.id],
+          queryFn: () => listItems(),
+          enabled: !!activeOrg,
+        },
+      ],
+    });
+
+  const chantiers = useMemo(
+    () => chantiersQ.data ?? [],
+    [chantiersQ.data]
+  );
+  const activeChantiers = useMemo(
+    () => chantiers.filter((c) => c.status === 'active'),
+    [chantiers]
+  );
+  const inactiveChantiers = useMemo(
+    () => chantiers.filter((c) => c.status !== 'active'),
+    [chantiers]
+  );
+
+  // Fan out one query per active chantier for its tasks. Cache key matches
+  // the Planning tab so navigating reuses these.
+  const taskQueries = useQueries({
+    queries: activeChantiers.map((c) => ({
+      queryKey: ['tasks', c.id],
+      queryFn: () => listTasksForChantier(c.id),
+      enabled: !!activeOrg,
+    })),
+  });
+
+  const summariesById = useMemo(
+    () => new Map((summariesQ.data ?? []).map((s) => [s.chantier_id, s])),
+    [summariesQ.data]
+  );
+
+  const perChantier = useMemo(
+    () =>
+      aggregatePerChantier(
+        attendanceQ.data ?? [],
+        workersQ.data ?? [],
+        days,
+        today
+      ),
+    [attendanceQ.data, workersQ.data, days, today]
+  );
+
+  const lowStockList = useMemo<LowStockItem[]>(() => {
+    const items = itemsQ.data ?? [];
+    const stockById = new Map(
+      (stockQ.data ?? []).map((s) => [s.item_id, Number(s.on_hand) || 0])
+    );
+    return items.flatMap((it) => {
+      if (it.reorder_threshold == null) return [];
+      const onHand = stockById.get(it.id) ?? 0;
+      const threshold = Number(it.reorder_threshold);
+      if (onHand >= threshold) return [];
+      return [{ item: it, onHand, threshold }];
+    });
+  }, [itemsQ.data, stockQ.data]);
+
+  const overBudgetList = useMemo<OverBudgetItem[]>(
+    () =>
+      activeChantiers.flatMap((c) => {
+        const s = summariesById.get(c.id);
+        if (!s || c.budget_total <= 0) return [];
+        if (s.total_spent <= c.budget_total) return [];
+        return [{ chantier: c, spent: s.total_spent, over: s.total_spent - c.budget_total }];
+      }),
+    [activeChantiers, summariesById]
+  );
+
+  const overdueTasksList = useMemo<OverdueTaskItem[]>(() => {
+    const chantierById = new Map(activeChantiers.map((c) => [c.id, c]));
+    const todayParsed = parseISO(today);
+    const out: OverdueTaskItem[] = [];
+    for (const q of taskQueries) {
+      for (const t of q.data ?? []) {
+        if (t.status === 'done') continue;
+        if (!t.start_date || t.duration_days == null) continue;
+        const end = addDays(parseISO(t.start_date), t.duration_days);
+        const endIso = format(end, 'yyyy-MM-dd');
+        if (endIso >= today) continue;
+        const chantier = chantierById.get(t.chantier_id);
+        if (!chantier) continue;
+        const daysOverdue = Math.max(
+          1,
+          Math.round((todayParsed.getTime() - end.getTime()) / 86_400_000)
+        );
+        out.push({ task: t, chantier, endIso, daysOverdue });
+      }
+    }
+    return out.sort((a, b) => b.daysOverdue - a.daysOverdue);
+  }, [taskQueries, activeChantiers, today]);
+
+  const lowStockCount = lowStockList.length;
+  const overBudgetCount = overBudgetList.length;
+  const overdueTasksCount = overdueTasksList.length;
+
+  const presentByChantier = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const [id, agg] of perChantier) {
+      m.set(id, agg.presentToday);
+    }
+    return m;
+  }, [perChantier]);
+
+  const totalPresentToday = useMemo(() => {
+    let count = 0;
+    for (const c of activeChantiers) {
+      count += perChantier.get(c.id)?.presentToday ?? 0;
+    }
+    return count;
+  }, [activeChantiers, perChantier]);
+
+  const totalCashPosition = useMemo(() => {
+    let cash = 0;
+    for (const c of activeChantiers) {
+      const s = summariesById.get(c.id);
+      if (!s) continue;
+      cash += s.payments_received - s.total_spent;
+    }
+    return cash;
+  }, [activeChantiers, summariesById]);
+
+  const isLoading =
+    chantiersQ.isLoading ||
+    summariesQ.isLoading ||
+    attendanceQ.isLoading ||
+    workersQ.isLoading;
+
+  // First-run / empty-org state
+  const isEmptyOrg = !isLoading && chantiers.length === 0;
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -53,55 +218,204 @@ export default function HomePage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card
-          title="Chantiers actifs"
-          value={<span className="text-bati-muted">—</span>}
-          hint="À venir : nombre de chantiers en cours."
-          to="/chantiers"
-          accent="teal"
+      {isEmptyOrg ? (
+        <EmptyState
+          title="Aucun chantier encore"
+          description="Créez votre premier chantier pour voir le tableau de bord prendre vie."
+          action={
+            <Link
+              to="/chantiers/new"
+              className="px-4 py-2 bg-bati-teal text-white rounded-md text-sm font-medium hover:opacity-90"
+            >
+              Créer un chantier
+            </Link>
+          }
         />
-        <Card
-          title="Pointage aujourd'hui"
-          value={<span className="text-bati-muted">—</span>}
-          hint="À venir : ouvriers présents aujourd'hui."
-          to="/pointage"
-          accent="success"
-        />
-        <Card
-          title="Stock bas"
-          value={<span className="text-bati-muted">—</span>}
-          hint="À venir : articles sous le seuil de réapprovisionnement."
-          to="/consommables"
-          accent="ochre"
-        />
-        <Card
-          title="Budget consommé"
-          value={<span className="text-bati-muted">—</span>}
-          hint="À venir : chantier avec l'écart budgétaire le plus élevé."
-          to="/budget"
-          accent="terra"
-        />
-      </div>
+      ) : (
+        <>
+          <DashboardKpiStrip
+            activeChantiersCount={activeChantiers.length}
+            presentToday={totalPresentToday}
+            alertsCount={overBudgetCount + lowStockCount + overdueTasksCount}
+            cashPosition={totalCashPosition}
+            isLoading={isLoading}
+            expandedKey={expandedKpi}
+            onToggle={(key) =>
+              setExpandedKpi((current) => (current === key ? null : key))
+            }
+          />
+
+          {expandedKpi === 'active' && (
+            <KpiDetailPanel
+              title={`Chantiers actifs (${activeChantiers.length})`}
+              onClose={() => setExpandedKpi(null)}
+            >
+              <ActiveChantiersDetail
+                chantiers={activeChantiers}
+                summariesById={summariesById}
+              />
+            </KpiDetailPanel>
+          )}
+          {expandedKpi === 'present' && (
+            <KpiDetailPanel
+              title={`Présents aujourd'hui (${totalPresentToday})`}
+              onClose={() => setExpandedKpi(null)}
+            >
+              <PresentTodayDetail
+                chantiers={activeChantiers}
+                presentByChantier={presentByChantier}
+              />
+            </KpiDetailPanel>
+          )}
+          {expandedKpi === 'alerts' && (
+            <KpiDetailPanel
+              title={`Alertes ouvertes (${overBudgetCount + lowStockCount + overdueTasksCount})`}
+              onClose={() => setExpandedKpi(null)}
+            >
+              <AlertsDetail
+                overBudget={overBudgetList}
+                lowStock={lowStockList}
+                overdueTasks={overdueTasksList}
+              />
+            </KpiDetailPanel>
+          )}
+          {expandedKpi === 'cash' && (
+            <KpiDetailPanel
+              title="Position de trésorerie par chantier"
+              onClose={() => setExpandedKpi(null)}
+            >
+              <CashPositionDetail
+                chantiers={chantiers}
+                summariesById={summariesById}
+              />
+            </KpiDetailPanel>
+          )}
+
+          {activeChantiers.length === 0 ? (
+            <EmptyState
+              title="Aucun chantier actif"
+              description="Réactivez un chantier en pause ou créez-en un nouveau."
+              action={
+                <Link
+                  to="/chantiers/new"
+                  className="px-4 py-2 bg-bati-teal text-white rounded-md text-sm font-medium hover:opacity-90"
+                >
+                  Créer un chantier
+                </Link>
+              }
+            />
+          ) : (
+            <div className="space-y-4">
+              {activeChantiers.map((c, idx) => {
+                const summary = summariesById.get(c.id) ?? blankSummary(c.id);
+                const agg = perChantier.get(c.id);
+                const tq = taskQueries[idx];
+                const tasks = computeTaskStats(tq?.data ?? []);
+                return (
+                  <ChantierScoreCard
+                    key={c.id}
+                    chantier={c}
+                    summary={summary}
+                    laborTimeSeries={agg?.laborSeries ?? []}
+                    presentToday={agg?.presentToday ?? 0}
+                    tasks={tasks}
+                  />
+                );
+              })}
+            </div>
+          )}
+
+          <PausedChantiersStrip
+            chantiers={inactiveChantiers}
+            summariesById={summariesById}
+          />
+        </>
+      )}
 
       {import.meta.env.DEV && activeOrg && <DemoDataCard />}
-
-      <div className="bati-card rounded-lg p-6">
-        <h2 className="text-base font-bold text-bati-teal mb-2">Bienvenue dans BatiTrack</h2>
-        <p className="text-sm text-bati-muted leading-relaxed">
-          Cette plateforme arrive progressivement. Les fonctionnalités sont activées
-          au fil des livraisons :
-        </p>
-        <ul className="text-sm text-bati-text mt-3 space-y-1.5 list-disc list-inside marker:text-bati-muted">
-          <li>Gestion des chantiers, ouvriers et membres de l&apos;organisation</li>
-          <li>Pointage quotidien et quinzaine avec primes et absences</li>
-          <li>Suivi des consommables : achats, consommation, transferts, ajustements</li>
-          <li>Tableau de bord budgétaire par chantier (main d&apos;œuvre / matériaux)</li>
-        </ul>
-      </div>
     </div>
   );
 }
+
+// ─── helpers ──────────────────────────────────────────────────────────
+
+function blankSummary(chantierId: string): BudgetSummary {
+  return {
+    chantier_id: chantierId,
+    labor_spent: 0,
+    materials_spent: 0,
+    equipment_spent: 0,
+    payments_received: 0,
+    total_spent: 0,
+    remaining: 0,
+  };
+}
+
+function computeTaskStats(tasks: TaskWithAssignments[]): {
+  done: number;
+  total: number;
+} {
+  let done = 0;
+  for (const t of tasks) {
+    if (t.status === 'done') done++;
+  }
+  return { done, total: tasks.length };
+}
+
+interface ChantierAgg {
+  laborSeries: number[];
+  presentToday: number;
+}
+
+function aggregatePerChantier(
+  attendance: Attendance[],
+  workers: Worker[],
+  days: string[],
+  today: string
+): Map<string, ChantierAgg> {
+  const rateByWorker = new Map(
+    workers.map((w) => [w.id, Number(w.daily_rate) || 0])
+  );
+  // (chantierId → date → labor cost for that day)
+  const labor = new Map<string, Map<string, number>>();
+  // (chantierId → count of present rows today)
+  const today_present = new Map<string, number>();
+
+  for (const a of attendance) {
+    let perChantier = labor.get(a.chantier_id);
+    if (!perChantier) {
+      perChantier = new Map();
+      labor.set(a.chantier_id, perChantier);
+    }
+    let dayCost = perChantier.get(a.attendance_date) ?? 0;
+    if (a.status === 'P') {
+      dayCost += rateByWorker.get(a.worker_id) ?? 0;
+    }
+    dayCost += Number(a.prime_amount) || 0;
+    perChantier.set(a.attendance_date, dayCost);
+
+    if (a.attendance_date === today && a.status === 'P') {
+      today_present.set(a.chantier_id, (today_present.get(a.chantier_id) ?? 0) + 1);
+    }
+  }
+
+  const out = new Map<string, ChantierAgg>();
+  const chantierIds = new Set<string>([
+    ...labor.keys(),
+    ...today_present.keys(),
+  ]);
+  for (const id of chantierIds) {
+    const perDay = labor.get(id);
+    const series = days.map((d) => perDay?.get(d) ?? 0);
+    out.set(id, {
+      laborSeries: series,
+      presentToday: today_present.get(id) ?? 0,
+    });
+  }
+  return out;
+}
+
+// ─── Dev demo data card (unchanged behavior) ──────────────────────────
 
 const DEMO_INVALIDATION_KEYS = [
   ['chantiers'],
@@ -114,6 +428,8 @@ const DEMO_INVALIDATION_KEYS = [
   ['budget-summaries'],
   ['stock-on-hand'],
   ['tasks'],
+  ['consumables-items'],
+  ['payments'],
 ];
 
 function DemoDataCard() {
@@ -129,7 +445,7 @@ function DemoDataCard() {
     mutationFn: () => seedDemoData(),
     onSuccess: async (counts) => {
       toast.success(
-        `Démo chargée — ${counts.chantiers} chantiers · ${counts.workers} ouvriers · ${counts.purchases} achats · ${counts.attendance} pointages · ${counts.tasks} tâches`
+        `Démo chargée — ${counts.chantiers} chantiers · ${counts.workers} ouvriers · ${counts.purchases} achats · ${counts.attendance} pointages · ${counts.tasks} tâches · ${counts.payments} paiements`
       );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['demo-data-present'] }),
@@ -225,3 +541,5 @@ function DemoDataCard() {
     </div>
   );
 }
+// Surface `Chantier` for type narrowing in tooling.
+export type { Chantier };

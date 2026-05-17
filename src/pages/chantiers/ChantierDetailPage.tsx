@@ -9,6 +9,9 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { toast } from '@/components/ui/Toast';
 import { formatMAD, formatDate } from '@/lib/format';
 import { PlanningView } from '@/pages/planning/PlanningView';
+import { PointageView } from '@/pages/pointage/PointageView';
+import { ChantierConsumablesView } from '@/pages/consommables/ChantierConsumablesView';
+import { ChantierBudgetView } from '@/pages/budget/ChantierBudgetView';
 
 type Tab = 'overview' | 'planning' | 'pointage' | 'consommables' | 'budget';
 
@@ -181,27 +184,10 @@ export default function ChantierDetailPage() {
       )}
 
       {tab === 'planning' && <PlanningView chantierId={c.id} />}
-
-      {tab === 'pointage' && (
-        <TabPlaceholder
-          label="Pointage"
-          milestone="M2"
-          description="Présence quotidienne, primes, absences. Coût main d'œuvre calculé automatiquement."
-        />
-      )}
-      {tab === 'consommables' && (
-        <TabPlaceholder
-          label="Consommables"
-          milestone="M3"
-          description="Achats, consommation, transferts, ajustements liés à ce chantier."
-        />
-      )}
+      {tab === 'pointage' && <PointageView chantierId={c.id} />}
+      {tab === 'consommables' && <ChantierConsumablesView chantierId={c.id} />}
       {tab === 'budget' && (
-        <TabPlaceholder
-          label="Budget"
-          milestone="M4"
-          description="Budget vs réel par catégorie, écarts et alertes."
-        />
+        <ChantierBudgetView chantier={c} onNavigateTab={(t) => setTab(t)} />
       )}
 
       <ConfirmDialog
@@ -256,20 +242,3 @@ function InfoRow({
   );
 }
 
-function TabPlaceholder({
-  label,
-  milestone,
-  description,
-}: {
-  label: string;
-  milestone: string;
-  description: string;
-}) {
-  return (
-    <div className="bati-card rounded-lg p-8 text-center">
-      <h3 className="text-base font-bold text-bati-text">{label}</h3>
-      <p className="text-sm text-bati-muted mt-2 max-w-md mx-auto">{description}</p>
-      <p className="text-xs text-bati-muted mt-3">Livraison {milestone}.</p>
-    </div>
-  );
-}
