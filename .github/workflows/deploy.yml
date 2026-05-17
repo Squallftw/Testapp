@@ -40,6 +40,11 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Expose the demo-data card on the GH Pages preview so visitors can
+          # populate their own org. RLS isolates writes per-org and the
+          # "Effacer" button only removes rows tagged with `Démo · `, so
+          # toggling the card never touches real data.
+          VITE_ENABLE_DEMO: 'true'
         run: npm run build
 
       - uses: actions/configure-pages@v4

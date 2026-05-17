@@ -332,7 +332,7 @@ export default function HomePage() {
         </>
       )}
 
-      {import.meta.env.DEV && activeOrg && <DemoDataCard />}
+      {DEMO_CARD_ENABLED && activeOrg && <DemoDataCard />}
     </div>
   );
 }
@@ -415,7 +415,15 @@ function aggregatePerChantier(
   return out;
 }
 
-// ─── Dev demo data card (unchanged behavior) ──────────────────────────
+// ─── Demo data card ────────────────────────────────────────────────────
+//
+// Shown in dev (always) and on deployments that opt in via
+// VITE_ENABLE_DEMO=true (set in .github/workflows/deploy.yml for the GH
+// Pages preview build so visitors can populate their own org). RLS isolates
+// the writes per-org, and `clearDemoData()` only touches rows tagged with
+// the `Démo · ` name prefix — so toggling the card never affects real data.
+const DEMO_CARD_ENABLED =
+  import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO === 'true';
 
 const DEMO_INVALIDATION_KEYS = [
   ['chantiers'],
@@ -479,7 +487,7 @@ function DemoDataCard() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <div className="text-xs uppercase tracking-wide text-bati-muted">
-            Mode développement
+            {import.meta.env.DEV ? 'Mode développement' : 'Mode démo'}
           </div>
           <h2 className="text-base font-bold text-bati-text mt-0.5">
             Données de démo
