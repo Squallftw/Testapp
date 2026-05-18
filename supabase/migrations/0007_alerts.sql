@@ -32,7 +32,7 @@ create table public.alerts (
   last_seen_at    timestamptz not null default now(),
   resolved_at     timestamptz,
   dismissed_at    timestamptz,
-  dismissed_by    uuid references auth.users(id),
+  dismissed_by    uuid references auth.users(id) on delete set null,
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );
@@ -61,18 +61,128 @@ create policy alerts_select on public.alerts for select to authenticated
     )
   );
 
--- UPDATE: dismiss only, same scope as SELECT, dismissed_by must be self.
-create policy alerts_dismiss on public.alerts for update to authenticated
-  using (
-    app.user_role_in_org(org_id) in ('owner','admin')
-    or (
-      app.user_role_in_org(org_id) = 'site_manager'
-      and (chantier_id is null or app.user_has_chantier(chantier_id))
-    )
-  )
-  with check (
-    dismissed_by = auth.uid()
-  );
+-- INSERT/DELETE/UPDATE: no policy means PostgREST denies for end users.
+-- Dismiss/undismiss happen via SECURITY DEFINER RPCs below so we can
+-- column-scope the state transition (Postgres has no column-level RLS;
+-- a permissive UPDATE policy would let callers overwrite title/body/etc).
+-- The Edge Function uses the service_role key which bypasses RLS for
+-- INSERT/DELETE.
 
--- INSERT/DELETE: service role only — no policy means PostgREST denies.
--- The Edge Function uses the service_role key which bypasses RLS.
+-- ─── dismiss_alert(p_id) ──────────────────────────────────────────────
+--
+-- State transition RPC. Verifies the caller has SELECT access to the row
+-- (same predicate as alerts_select), then flips dismissed_at / dismissed_by
+-- and nothing else. Raises if the alert is already resolved or dismissed.
+
+create or replace function public.dismiss_alert(p_id uuid)
+returns public.alerts
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_caller uuid := auth.uid();
+  v_row    public.alerts;
+begin
+  if v_caller is null then
+    raise exception 'Must be authenticated' using errcode = '42501';
+  end if;
+
+  -- Lock the target row so the visibility check and the update see the
+  -- same state (prevents TOCTOU between SELECT and UPDATE).
+  select * into v_row from public.alerts where id = p_id for update;
+
+  if v_row.id is null then
+    raise exception 'Alerte introuvable' using errcode = 'P0002';
+  end if;
+
+  -- Same visibility predicate as alerts_select.
+  if not (
+    app.user_role_in_org(v_row.org_id) in ('owner','admin')
+    or (
+      app.user_role_in_org(v_row.org_id) = 'site_manager'
+      and (v_row.chantier_id is null or app.user_has_chantier(v_row.chantier_id))
+    )
+  ) then
+    raise exception 'Access denied' using errcode = '42501';
+  end if;
+
+  if v_row.resolved_at is not null then
+    raise exception 'Cette alerte est déjà résolue' using errcode = '22000';
+  end if;
+  if v_row.dismissed_at is not null then
+    raise exception 'Cette alerte est déjà ignorée' using errcode = '22000';
+  end if;
+
+  update public.alerts
+     set dismissed_at = now(),
+         dismissed_by = v_caller,
+         updated_at   = now()
+   where id = p_id
+  returning * into v_row;
+
+  return v_row;
+end;
+$$;
+
+revoke execute on function public.dismiss_alert(uuid) from public;
+grant  execute on function public.dismiss_alert(uuid) to authenticated;
+
+-- ─── undismiss_alert(p_id) ────────────────────────────────────────────
+--
+-- Reverses a dismissal: clears dismissed_at / dismissed_by. Same caller
+-- visibility check as dismiss_alert.
+
+create or replace function public.undismiss_alert(p_id uuid)
+returns public.alerts
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  v_caller uuid := auth.uid();
+  v_row    public.alerts;
+begin
+  if v_caller is null then
+    raise exception 'Must be authenticated' using errcode = '42501';
+  end if;
+
+  select * into v_row from public.alerts where id = p_id for update;
+
+  if v_row.id is null then
+    raise exception 'Alerte introuvable' using errcode = 'P0002';
+  end if;
+
+  if not (
+    app.user_role_in_org(v_row.org_id) in ('owner','admin')
+    or (
+      app.user_role_in_org(v_row.org_id) = 'site_manager'
+      and (v_row.chantier_id is null or app.user_has_chantier(v_row.chantier_id))
+    )
+  ) then
+    raise exception 'Access denied' using errcode = '42501';
+  end if;
+
+  if v_row.dismissed_at is null then
+    raise exception 'Cette alerte n''est pas ignorée' using errcode = '22000';
+  end if;
+
+  update public.alerts
+     set dismissed_at = null,
+         dismissed_by = null,
+         updated_at   = now()
+   where id = p_id
+  returning * into v_row;
+
+  return v_row;
+end;
+$$;
+
+revoke execute on function public.undismiss_alert(uuid) from public;
+grant  execute on function public.undismiss_alert(uuid) to authenticated;
+
+-- ─── triggers ─────────────────────────────────────────────────────────
+-- Match conventions from 0001: every table with updated_at gets a bump
+-- trigger; every state-bearing table gets an audit trigger.
+
+create trigger trg_bump_alerts
+  before update on public.alerts
+  for each row execute function app.bump_updated_at();
+
+create trigger trg_audit_alerts
+  after insert or update or delete on public.alerts
+  for each row execute function app.write_audit();
