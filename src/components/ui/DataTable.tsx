@@ -12,6 +12,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Skeleton } from './Skeleton';
 import { EmptyState } from './EmptyState';
 import { ConfirmDialog } from './ConfirmDialog';
+import { Button } from './Button';
 import { toast } from './Toast';
 
 export interface BulkDeleteConfig<TData> {
@@ -171,20 +172,16 @@ export function DataTable<TData>({
             {selectedCount} sélectionné{selectedCount > 1 ? 's' : ''}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setRowSelection({})}
-              className="px-3 py-1.5 text-xs text-bati-muted hover:text-bati-text hover:bg-bati-border-soft rounded-md transition-colors"
-            >
+            <Button size="xs" variant="ghost" onClick={() => setRowSelection({})}>
               Tout désélectionner
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              size="xs"
+              variant="destructive"
               onClick={() => setConfirming(true)}
-              className="px-3 py-1.5 text-xs font-medium text-white bg-bati-terra rounded-md hover:opacity-90"
             >
               {bulkDelete.actionLabel ?? 'Supprimer'} ({selectedCount})
-            </button>
+            </Button>
           </div>
         </div>
       )}

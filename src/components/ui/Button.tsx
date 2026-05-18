@@ -1,11 +1,13 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { Spinner } from './Spinner';
+import {
+  buttonClasses,
+  type ButtonSize,
+  type ButtonVariant,
+} from './button-styles';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive';
-// `xs` exists for tight contexts (action bars, table row buttons, inline
-// toolbars). It's deliberately a 28px target — fine on desktop, marginal on
-// touch, so don't use it for primary mobile actions.
-export type ButtonSize = 'xs' | 'sm' | 'md';
+// Re-export for callers that imported these types from Button.tsx.
+export type { ButtonSize, ButtonVariant };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -16,32 +18,6 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   leadingIcon?: ReactNode;
   children: ReactNode;
 }
-
-const BASE =
-  'inline-flex items-center justify-center gap-2 rounded-md font-medium ' +
-  'transition-[background-color,opacity,transform,box-shadow] duration-150 ' +
-  // Two-ring focus treatment: a tight 2px ring in the brand colour, offset
-  // by 2px in the page background so it reads cleanly on cards AND on the
-  // bati-bg parchment. Matches `.bati-input` focus chrome.
-  'focus:outline-none focus-visible:ring-2 focus-visible:ring-bati-teal/55 ' +
-  'focus-visible:ring-offset-2 focus-visible:ring-offset-bati-bg ' +
-  'disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none';
-
-const SIZE: Record<ButtonSize, string> = {
-  xs: 'h-7 px-2.5 text-xs',
-  sm: 'h-8 px-3 text-xs',
-  md: 'h-9 px-4 text-sm',
-};
-
-const VARIANT: Record<ButtonVariant, string> = {
-  primary:
-    'bg-bati-teal text-white hover:bg-bati-teal-deep active:translate-y-px shadow-sm hover:shadow',
-  secondary:
-    'bg-bati-card text-bati-text border border-bati-border hover:bg-bati-border-soft hover:border-bati-muted/30',
-  ghost: 'text-bati-text hover:bg-bati-border-soft',
-  destructive:
-    'bg-bati-terra text-white hover:bg-[#a04832] active:translate-y-px shadow-sm hover:shadow',
-};
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   {
@@ -62,7 +38,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       type={type}
       disabled={disabled || loading}
-      className={`${BASE} ${SIZE[size]} ${VARIANT[variant]} ${className}`}
+      className={buttonClasses(variant, size, className)}
       aria-busy={loading || undefined}
       {...rest}
     >

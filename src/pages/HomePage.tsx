@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { addDays, format, parseISO, subDays } from 'date-fns';
 import { useOrg } from '@/contexts/OrgContext';
@@ -10,6 +9,8 @@ import { listItems, listStockOnHand } from '@/data/consumables';
 import { getSummariesForOrg, type BudgetSummary } from '@/data/budget-engine';
 import { listTasksForChantier, type TaskWithAssignments } from '@/data/tasks';
 import { clearDemoData, hasDemoData, seedDemoData } from '@/data/seed-demo';
+import { Button } from '@/components/ui/Button';
+import { ButtonLink } from '@/components/ui/ButtonLink';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { toast } from '@/components/ui/Toast';
@@ -222,14 +223,7 @@ export default function HomePage() {
         <EmptyState
           title="Aucun chantier encore"
           description="Créez votre premier chantier pour voir le tableau de bord prendre vie."
-          action={
-            <Link
-              to="/chantiers/new"
-              className="px-4 py-2 bg-bati-teal text-white rounded-md text-sm font-medium hover:opacity-90"
-            >
-              Créer un chantier
-            </Link>
-          }
+          action={<ButtonLink to="/chantiers/new">Créer un chantier</ButtonLink>}
         />
       ) : (
         <>
@@ -295,14 +289,7 @@ export default function HomePage() {
             <EmptyState
               title="Aucun chantier actif"
               description="Réactivez un chantier en pause ou créez-en un nouveau."
-              action={
-                <Link
-                  to="/chantiers/new"
-                  className="px-4 py-2 bg-bati-teal text-white rounded-md text-sm font-medium hover:opacity-90"
-                >
-                  Créer un chantier
-                </Link>
-              }
+              action={<ButtonLink to="/chantiers/new">Créer un chantier</ButtonLink>}
             />
           ) : (
             <div className="space-y-4">
@@ -512,22 +499,20 @@ function DemoDataCard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
+          <Button
             onClick={() => seed.mutate()}
-            disabled={isBusy || isPresent || present.isLoading}
-            className="px-4 py-2 bg-bati-teal text-white rounded-md text-sm font-medium hover:opacity-90 disabled:opacity-40"
+            disabled={clear.isPending || isPresent || present.isLoading}
+            loading={seed.isPending}
           >
             {seed.isPending ? 'Chargement…' : 'Charger les données de démo'}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="secondary"
             onClick={() => setConfirmingClear(true)}
             disabled={isBusy || !isPresent}
-            className="px-4 py-2 border border-bati-terra text-bati-terra rounded-md text-sm font-medium hover:bg-bati-terra hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-bati-terra transition-colors"
           >
             Effacer les données de démo
-          </button>
+          </Button>
         </div>
       </div>
 
