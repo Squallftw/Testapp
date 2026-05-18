@@ -109,7 +109,7 @@ export function ChantierConsumablesView({ chantierId }: ChantierConsumablesViewP
           to="/consommables/articles"
           className="text-bati-teal hover:underline font-medium whitespace-nowrap ml-3"
         >
-          Ouvrir les consommables →
+          Ouvrir les matériaux →
         </Link>
       </div>
     </div>

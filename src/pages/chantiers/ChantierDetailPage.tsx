@@ -12,14 +12,22 @@ import { PlanningView } from '@/pages/planning/PlanningView';
 import { PointageView } from '@/pages/pointage/PointageView';
 import { ChantierConsumablesView } from '@/pages/consommables/ChantierConsumablesView';
 import { ChantierBudgetView } from '@/pages/budget/ChantierBudgetView';
+import { ChantierMaterielsView } from '@/pages/materiels/ChantierMaterielsView';
 
-type Tab = 'overview' | 'planning' | 'pointage' | 'consommables' | 'budget';
+type Tab =
+  | 'overview'
+  | 'planning'
+  | 'pointage'
+  | 'consommables'
+  | 'materiels'
+  | 'budget';
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'overview', label: 'Vue d\'ensemble' },
   { id: 'planning', label: 'Planning' },
   { id: 'pointage', label: 'Pointage' },
-  { id: 'consommables', label: 'Consommables' },
+  { id: 'consommables', label: 'Matériaux' },
+  { id: 'materiels', label: 'Matériels' },
   { id: 'budget', label: 'Budget' },
 ];
 
@@ -171,7 +179,13 @@ export default function ChantierDetailPage() {
             <InfoRow label="Budget total" value={formatMAD(c.budget_total)} highlight />
             <InfoRow label="Main d'œuvre" value={formatMAD(c.budget_labor)} />
             <InfoRow label="Matériaux" value={formatMAD(c.budget_materials)} />
-            <InfoRow label="Divers (calc.)" value={formatMAD(c.budget_total - c.budget_labor - c.budget_materials)} />
+            <InfoRow label="Matériels" value={formatMAD(c.budget_equipment)} />
+            <InfoRow
+              label="Divers (calc.)"
+              value={formatMAD(
+                c.budget_total - c.budget_labor - c.budget_materials - c.budget_equipment
+              )}
+            />
           </InfoCard>
           <InfoCard title="Contrat">
             <InfoRow label="Valeur du contrat" value={formatMAD(c.contract_value)} />
@@ -186,6 +200,7 @@ export default function ChantierDetailPage() {
       {tab === 'planning' && <PlanningView chantierId={c.id} />}
       {tab === 'pointage' && <PointageView chantierId={c.id} />}
       {tab === 'consommables' && <ChantierConsumablesView chantierId={c.id} />}
+      {tab === 'materiels' && <ChantierMaterielsView chantierId={c.id} />}
       {tab === 'budget' && (
         <ChantierBudgetView chantier={c} onNavigateTab={(t) => setTab(t)} />
       )}
@@ -197,7 +212,7 @@ export default function ChantierDetailPage() {
         description={
           <>
             Le chantier <strong>{c.name}</strong> sera archivé. Les données associées
-            (pointage, consommables, paiements) restent visibles dans l&apos;historique mais
+            (pointage, matériaux, paiements) restent visibles dans l&apos;historique mais
             le chantier disparaît des listes. Cette action peut être annulée par un
             administrateur.
           </>

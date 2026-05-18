@@ -92,6 +92,11 @@ export function ChantierScoreCard({
                 budget={chantier.budget_materials}
               />
               <MiniBar
+                label="Matériels"
+                spent={summary.equipment_spent}
+                budget={chantier.budget_equipment}
+              />
+              <MiniBar
                 label="Total"
                 spent={summary.total_spent}
                 budget={chantier.budget_total}

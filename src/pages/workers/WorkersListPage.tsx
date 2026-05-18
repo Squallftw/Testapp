@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
 import {
   hueToColor,
   listWorkers,
+  softDeleteWorker,
   WORKER_STATUS_LABEL,
   type Worker,
   type WorkerStatus,
@@ -24,6 +25,7 @@ const columnHelper = createColumnHelper<Worker>();
 
 export default function WorkersListPage() {
   const { activeOrg } = useOrg();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | WorkerStatus>('active');
 
@@ -182,6 +184,16 @@ export default function WorkersListPage() {
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Rechercher un ouvrier…"
+        bulkDelete={{
+          confirmTitle: (n) => `Archiver ${n} ouvrier${n > 1 ? 's' : ''} ?`,
+          confirmDescription: (n) =>
+            `${n} ouvrier${n > 1 ? 's' : ''} ${n > 1 ? 'seront archivés' : 'sera archivé'} et n'apparaîtront plus dans les listes. L'historique de pointage reste préservé.`,
+          successMessage: (n) => `${n} ouvrier${n > 1 ? 's' : ''} archivé${n > 1 ? 's' : ''}`,
+          onConfirm: async (selected) => {
+            await Promise.all(selected.map((w) => softDeleteWorker(w.id)));
+            await queryClient.invalidateQueries({ queryKey: ['workers'] });
+          },
+        }}
         empty={
           <EmptyState
             title={

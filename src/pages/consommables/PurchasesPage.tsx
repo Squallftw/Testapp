@@ -160,6 +160,17 @@ export default function PurchasesPage() {
         data={purchases.data ?? []}
         columns={columns}
         isLoading={purchases.isLoading}
+        bulkDelete={{
+          confirmTitle: (n) => `Supprimer ${n} achat${n > 1 ? 's' : ''} ?`,
+          confirmDescription: (n) =>
+            `${n} achat${n > 1 ? 's seront supprimés' : ' sera supprimé'}. Le stock sera recalculé en conséquence.`,
+          successMessage: (n) => `${n} achat${n > 1 ? 's' : ''} supprimé${n > 1 ? 's' : ''}`,
+          onConfirm: async (selected) => {
+            await Promise.all(selected.map((p) => softDeletePurchase(p.id)));
+            await queryClient.invalidateQueries({ queryKey: ['purchases'] });
+            await queryClient.invalidateQueries({ queryKey: ['stock-on-hand'] });
+          },
+        }}
         empty={
           <EmptyState
             title="Aucun achat"

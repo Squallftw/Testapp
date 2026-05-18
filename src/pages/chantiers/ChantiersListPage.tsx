@@ -1,8 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createColumnHelper } from '@tanstack/react-table';
-import { listChantiers, type Chantier, type ChantierStatus } from '@/data/chantiers';
+import {
+  listChantiers,
+  softDeleteChantier,
+  type Chantier,
+  type ChantierStatus,
+} from '@/data/chantiers';
 import { useOrg } from '@/contexts/OrgContext';
 import { DataTable } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -21,9 +26,11 @@ const columnHelper = createColumnHelper<Chantier>();
 
 export default function ChantiersListPage() {
   const { activeOrg, myRole } = useOrg();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | ChantierStatus>('all');
   const canCreate = myRole === 'owner' || myRole === 'admin';
+  const canBulkDelete = canCreate;
 
   const query = useQuery({
     queryKey: ['chantiers', activeOrg?.id],
@@ -169,6 +176,21 @@ export default function ChantiersListPage() {
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Rechercher un chantier…"
+        bulkDelete={
+          canBulkDelete
+            ? {
+                confirmTitle: (n) => `Supprimer ${n} chantier${n > 1 ? 's' : ''} ?`,
+                confirmDescription: (n) =>
+                  `${n} chantier${n > 1 ? 's seront archivés' : ' sera archivé'}. Les données associées (pointage, matériaux, paiements) restent visibles dans l'historique mais les chantiers disparaissent des listes.`,
+                successMessage: (n) => `${n} chantier${n > 1 ? 's' : ''} archivé${n > 1 ? 's' : ''}`,
+                onConfirm: async (selected) => {
+                  await Promise.all(selected.map((c) => softDeleteChantier(c.id)));
+                  await queryClient.invalidateQueries({ queryKey: ['chantiers'] });
+                  await queryClient.invalidateQueries({ queryKey: ['budget-summaries'] });
+                },
+              }
+            : undefined
+        }
         empty={
           <EmptyState
             title={

@@ -34,16 +34,20 @@ const FormSchema = z
     budget_total: z.coerce.number().min(0, 'Doit être ≥ 0').max(1e12),
     budget_labor: z.coerce.number().min(0, 'Doit être ≥ 0').max(1e12),
     budget_materials: z.coerce.number().min(0, 'Doit être ≥ 0').max(1e12),
+    budget_equipment: z.coerce.number().min(0, 'Doit être ≥ 0').max(1e12),
     contract_value: z.coerce.number().min(0, 'Doit être ≥ 0').max(1e12),
     status: z.enum(['active', 'paused', 'completed', 'cancelled']),
   })
   .superRefine((data, ctx) => {
-    if (data.budget_labor + data.budget_materials > data.budget_total) {
+    if (
+      data.budget_labor + data.budget_materials + data.budget_equipment >
+      data.budget_total
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['budget_total'],
         message:
-          'Le budget total doit être ≥ main d\'œuvre + matériaux (« divers » inclus).',
+          'Le budget total doit être ≥ main d\'œuvre + matériaux + matériels (« divers » inclus).',
       });
     }
     if (data.date_start && data.date_end_prev && data.date_end_prev < data.date_start) {
@@ -69,6 +73,7 @@ const DEFAULT_VALUES: FormValues = {
   budget_total: 0,
   budget_labor: 0,
   budget_materials: 0,
+  budget_equipment: 0,
   contract_value: 0,
   status: 'active',
 };
@@ -86,6 +91,7 @@ function chantierToFormValues(c: Chantier): FormValues {
     budget_total: Number(c.budget_total),
     budget_labor: Number(c.budget_labor),
     budget_materials: Number(c.budget_materials),
+    budget_equipment: Number(c.budget_equipment),
     contract_value: Number(c.contract_value),
     status: c.status,
   };
@@ -138,6 +144,7 @@ export default function ChantierEditPage() {
         budget_total: values.budget_total,
         budget_labor: values.budget_labor,
         budget_materials: values.budget_materials,
+        budget_equipment: values.budget_equipment,
         contract_value: values.contract_value,
         status: values.status,
       });
@@ -167,6 +174,7 @@ export default function ChantierEditPage() {
         budget_total: values.budget_total,
         budget_labor: values.budget_labor,
         budget_materials: values.budget_materials,
+        budget_equipment: values.budget_equipment,
         contract_value: values.contract_value,
         status: values.status,
       });
@@ -306,7 +314,7 @@ export default function ChantierEditPage() {
         <Section title="Budget">
           <p className="text-xs text-bati-muted mb-2">
             Les montants sont en MAD. Le total inclut une enveloppe « divers » non
-            répartie ; main d&apos;œuvre + matériaux doivent rester ≤ total.
+            répartie ; main d&apos;œuvre + matériaux + matériels doivent rester ≤ total.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Field
@@ -357,6 +365,19 @@ export default function ChantierEditPage() {
                 min="0"
                 className="bati-input"
                 {...form.register('budget_materials')}
+              />
+            </Field>
+            <Field
+              label="Budget matériels"
+              hint="Location & usage d'équipements (bétonnière, échafaudage, etc.)."
+              error={form.formState.errors.budget_equipment?.message}
+            >
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="bati-input"
+                {...form.register('budget_equipment')}
               />
             </Field>
           </div>

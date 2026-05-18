@@ -12,7 +12,7 @@ export default function ConsommablesLayout() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-bati-text">Consommables</h1>
+        <h1 className="text-2xl font-bold text-bati-text">Matériaux</h1>
         <p className="text-sm text-bati-muted mt-0.5">
           Articles, achats, consommation, transferts et ajustements.
         </p>

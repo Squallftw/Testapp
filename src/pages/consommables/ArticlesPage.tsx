@@ -177,6 +177,17 @@ export default function ArticlesPage() {
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Rechercher un article…"
+        bulkDelete={{
+          confirmTitle: (n) => `Archiver ${n} article${n > 1 ? 's' : ''} ?`,
+          confirmDescription: (n) =>
+            `${n} article${n > 1 ? 's' : ''} n'apparaîtront plus dans les listes. L'historique reste préservé.`,
+          successMessage: (n) => `${n} article${n > 1 ? 's' : ''} archivé${n > 1 ? 's' : ''}`,
+          onConfirm: async (selected) => {
+            await Promise.all(selected.map((i) => softDeleteItem(i.id)));
+            await queryClient.invalidateQueries({ queryKey: ['items'] });
+            await queryClient.invalidateQueries({ queryKey: ['stock-on-hand'] });
+          },
+        }}
         empty={
           <EmptyState
             title="Aucun article"

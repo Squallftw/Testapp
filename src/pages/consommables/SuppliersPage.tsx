@@ -115,6 +115,16 @@ export default function SuppliersPage() {
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Rechercher un fournisseur…"
+        bulkDelete={{
+          confirmTitle: (n) => `Archiver ${n} fournisseur${n > 1 ? 's' : ''} ?`,
+          confirmDescription: (n) =>
+            `${n} fournisseur${n > 1 ? 's' : ''} n'apparaîtront plus dans les listes.`,
+          successMessage: (n) => `${n} fournisseur${n > 1 ? 's' : ''} archivé${n > 1 ? 's' : ''}`,
+          onConfirm: async (selected) => {
+            await Promise.all(selected.map((s) => softDeleteSupplier(s.id)));
+            await queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+          },
+        }}
         empty={
           <EmptyState
             title="Aucun fournisseur"

@@ -19,6 +19,7 @@ export interface Chantier {
   budget_total: number;
   budget_labor: number;
   budget_materials: number;
+  budget_equipment: number;
   contract_value: number;
   status: ChantierStatus;
   created_at: string;

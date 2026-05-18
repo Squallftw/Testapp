@@ -177,6 +177,18 @@ export default function ConsumptionPage() {
         data={consumption.data ?? []}
         columns={columns}
         isLoading={consumption.isLoading}
+        bulkDelete={{
+          confirmTitle: (n) => `Supprimer ${n} consommation${n > 1 ? 's' : ''} ?`,
+          confirmDescription: (n) =>
+            `${n} consommation${n > 1 ? 's seront supprimées' : ' sera supprimée'}. Le stock sera recalculé en conséquence.`,
+          successMessage: (n) => `${n} consommation${n > 1 ? 's' : ''} supprimée${n > 1 ? 's' : ''}`,
+          onConfirm: async (selected) => {
+            await Promise.all(selected.map((c) => softDeleteConsumption(c.id)));
+            await queryClient.invalidateQueries({ queryKey: ['consumption'] });
+            await queryClient.invalidateQueries({ queryKey: ['stock-on-hand'] });
+            await queryClient.invalidateQueries({ queryKey: ['budget-summaries'] });
+          },
+        }}
         empty={
           <EmptyState
             title="Aucune consommation"

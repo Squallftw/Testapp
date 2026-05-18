@@ -29,8 +29,8 @@ import SuppliersPage from '@/pages/consommables/SuppliersPage';
 import PurchasesPage from '@/pages/consommables/PurchasesPage';
 import ConsumptionPage from '@/pages/consommables/ConsumptionPage';
 import MovementsPage from '@/pages/consommables/MovementsPage';
-import BudgetDashboardPage from '@/pages/budget/BudgetDashboardPage';
 import PlanningPage from '@/pages/planning/PlanningPage';
+import MaterielsListPage from '@/pages/materiels/MaterielsListPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -95,7 +95,7 @@ export default function App() {
                       <Route path="fournisseurs" element={<SuppliersPage />} />
                       <Route path="mouvements" element={<MovementsPage />} />
                     </Route>
-                    <Route path="/budget" element={<BudgetDashboardPage />} />
+                    <Route path="/materiels" element={<MaterielsListPage />} />
 
                     {/* Owner/admin-only routes */}
                     <Route element={<RequireRole roles={['owner', 'admin']} />}>

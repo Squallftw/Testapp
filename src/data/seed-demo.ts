@@ -32,6 +32,11 @@ import {
 import { bulkUpsertAttendance, type UpsertAttendanceInput } from './attendance';
 import { createTask } from './tasks';
 import { createPayment } from './payments';
+import {
+  createDeployment,
+  createMateriel,
+  type Materiel,
+} from './materiels';
 
 export const DEMO_NAME_PREFIX = 'Démo · ';
 
@@ -48,6 +53,8 @@ export interface SeedCounts {
   consumption: number;
   tasks: number;
   payments: number;
+  materiels: number;
+  deployments: number;
 }
 
 // ─── helpers ────────────────────────────────────────────────────────────
@@ -82,6 +89,7 @@ export async function seedDemoData(): Promise<SeedCounts> {
   }
 
   const { suppliers, workers, items } = await createSharedPool();
+  const materielsPool = await createSharedMateriels();
   const counts = {
     chantiers: 0,
     workers: Object.keys(workers).length,
@@ -92,6 +100,8 @@ export async function seedDemoData(): Promise<SeedCounts> {
     consumption: 0,
     tasks: 0,
     payments: 0,
+    materiels: Object.keys(materielsPool).length,
+    deployments: 0,
   };
 
   // Purchases stock the depot first, then chantiers' consumption draws from it.
@@ -105,6 +115,7 @@ export async function seedDemoData(): Promise<SeedCounts> {
   counts.consumption += atelierStats.consumption;
   counts.tasks += await seedAtelierPlanning(atelier, workers);
   counts.payments += await seedAtelierPayments(atelier);
+  counts.deployments += await seedAtelierDeployments(atelier, materielsPool);
 
   const villa = await createVillaChantier();
   counts.chantiers += 1;
@@ -113,8 +124,108 @@ export async function seedDemoData(): Promise<SeedCounts> {
   counts.consumption += villaStats.consumption;
   counts.tasks += await seedVillaPlanning(villa, workers);
   counts.payments += await seedVillaPayments(villa);
+  counts.deployments += await seedVillaDeployments(villa, materielsPool);
 
   return counts;
+}
+
+// ─── Matériels ──────────────────────────────────────────────────────────
+
+interface MaterielsPool {
+  betonniere: Materiel;
+  echafaudage: Materiel;
+  camionBenne: Materiel;
+  marteauPiqueur: Materiel;
+  generateur: Materiel;
+}
+
+async function createSharedMateriels(): Promise<MaterielsPool> {
+  const betonniere = await createMateriel({
+    name: `${DEMO_NAME_PREFIX}Bétonnière 250 L`,
+    category: 'Gros œuvre',
+    type: 'possede',
+    qty: 2,
+    unit: 'unité',
+    cost_per_day: 60,
+  });
+  const echafaudage = await createMateriel({
+    name: `${DEMO_NAME_PREFIX}Échafaudage 30 m²`,
+    category: 'Gros œuvre',
+    type: 'loue',
+    qty: 1,
+    unit: 'lot',
+    cost_per_day: 180,
+  });
+  const camionBenne = await createMateriel({
+    name: `${DEMO_NAME_PREFIX}Camion benne 6 t`,
+    category: 'Transport',
+    type: 'loue',
+    qty: 1,
+    unit: 'unité',
+    cost_per_day: 450,
+  });
+  const marteauPiqueur = await createMateriel({
+    name: `${DEMO_NAME_PREFIX}Marteau-piqueur pneumatique`,
+    category: 'Démolition',
+    type: 'possede',
+    qty: 1,
+    unit: 'unité',
+    cost_per_day: 40,
+  });
+  const generateur = await createMateriel({
+    name: `${DEMO_NAME_PREFIX}Générateur 5 kVA`,
+    category: 'Électricité',
+    type: 'loue',
+    qty: 1,
+    unit: 'unité',
+    cost_per_day: 120,
+  });
+  return { betonniere, echafaudage, camionBenne, marteauPiqueur, generateur };
+}
+
+async function seedAtelierDeployments(
+  atelier: Chantier,
+  pool: MaterielsPool
+): Promise<number> {
+  // Completed chantier (90 → 30 days ago). Mix of own + rented gear.
+  const deps = [
+    { mat: pool.marteauPiqueur, start: 85, end: 75, qty: 1 }, // démolition phase
+    { mat: pool.camionBenne, start: 85, end: 70, qty: 1 }, // évacuation gravats
+    { mat: pool.betonniere, start: 65, end: 40, qty: 1 }, // coulage / scellement
+    { mat: pool.generateur, start: 65, end: 32, qty: 1 }, // alim chantier
+  ];
+  for (const d of deps) {
+    await createDeployment({
+      materiel_id: d.mat.id,
+      chantier_id: atelier.id,
+      start_date: isoDaysAgo(d.start),
+      end_date: isoDaysAgo(d.end),
+      qty: d.qty,
+    });
+  }
+  return deps.length;
+}
+
+async function seedVillaDeployments(
+  villa: Chantier,
+  pool: MaterielsPool
+): Promise<number> {
+  // Active chantier started 28 days ago.
+  const deps = [
+    { mat: pool.echafaudage, start: 25, end: 0, qty: 1 }, // toujours en place
+    { mat: pool.betonniere, start: 20, end: 5, qty: 2 }, // 2 bétonnières
+    { mat: pool.camionBenne, start: 22, end: 18, qty: 1 }, // livraison matériaux
+  ];
+  for (const d of deps) {
+    await createDeployment({
+      materiel_id: d.mat.id,
+      chantier_id: villa.id,
+      start_date: isoDaysAgo(d.start),
+      end_date: isoDaysAgo(d.end),
+      qty: d.qty,
+    });
+  }
+  return deps.length;
 }
 
 // ─── Payments ───────────────────────────────────────────────────────────
@@ -433,6 +544,7 @@ async function createAtelierChantier(): Promise<Chantier> {
     budget_total: 80000,
     budget_labor: 50000,
     budget_materials: 25000,
+    budget_equipment: 5000,
     contract_value: 95000,
     status: 'completed',
   });
@@ -544,6 +656,7 @@ async function createVillaChantier(): Promise<Chantier> {
     budget_total: 150000,
     budget_labor: 90000,
     budget_materials: 50000,
+    budget_equipment: 10000,
     contract_value: 180000,
     status: 'active',
   });
@@ -816,6 +929,33 @@ export async function clearDemoData(): Promise<{ deleted: number }> {
       .update({ deleted_at: nowIso })
       .eq('org_id', orgId)
       .in('chantier_id', chantierIds)
+      .is('deleted_at', null)
+      .select('id');
+    if (error) throw mapSupabaseError(error);
+    deleted += data?.length ?? 0;
+  }
+
+  // 4c. Materiel deployments — soft delete by chantier (must come before
+  //     the materiels themselves so we don't lose the link).
+  if (chantierIds.length > 0) {
+    const { data, error } = await supabase
+      .from('materiel_deployments')
+      .update({ deleted_at: nowIso })
+      .eq('org_id', orgId)
+      .in('chantier_id', chantierIds)
+      .is('deleted_at', null)
+      .select('id');
+    if (error) throw mapSupabaseError(error);
+    deleted += data?.length ?? 0;
+  }
+
+  // 4d. Materiels — soft delete by name prefix.
+  {
+    const { data, error } = await supabase
+      .from('materiels')
+      .update({ deleted_at: nowIso })
+      .eq('org_id', orgId)
+      .like('name', `${DEMO_NAME_PREFIX}%`)
       .is('deleted_at', null)
       .select('id');
     if (error) throw mapSupabaseError(error);

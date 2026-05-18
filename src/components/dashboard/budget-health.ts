@@ -2,7 +2,7 @@ export type BudgetHealth = 'sain' | 'attention' | 'depassement' | 'unknown';
 
 /**
  * Classify a budget-consumption ratio into a health bucket.
- * Mirrors the threshold colors used in BudgetBar (BudgetDashboardPage.tsx:199).
+ * Mirrors the threshold colors used in BudgetBar (ChantierBudgetView.tsx).
  *
  * - sain         pct ≤ 0.8   (green)
  * - attention   0.8 < pct ≤ 1   (ochre)

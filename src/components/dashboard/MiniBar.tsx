@@ -10,7 +10,7 @@ interface MiniBarProps {
 
 /**
  * Compact, non-clickable progress bar used inside ChantierScoreCard.
- * For the clickable, CTA-equipped version see BudgetBar in BudgetDashboardPage.
+ * For the clickable, CTA-equipped version see BudgetBar in ChantierBudgetView.
  */
 export function MiniBar({ label, spent, budget, emphasis = false }: MiniBarProps) {
   const hasBudget = budget > 0;

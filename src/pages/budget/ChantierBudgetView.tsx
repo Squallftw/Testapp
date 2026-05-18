@@ -1,11 +1,17 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { type Chantier } from '@/data/chantiers';
 import { getSummary } from '@/data/budget-engine';
 import { useOrg } from '@/contexts/OrgContext';
 import { formatMAD, formatPercent } from '@/lib/format';
 import { PaymentsSection } from './PaymentsSection';
+import { StatCard } from './_shared';
+import {
+  BudgetCategoryDashboardModal,
+  type DashboardCategory,
+} from './BudgetCategoryDashboardModal';
 
-export type ChantierBudgetTab = 'pointage' | 'consommables';
+export type ChantierBudgetTab = 'pointage' | 'consommables' | 'materiels';
 
 interface ChantierBudgetViewProps {
   chantier: Chantier;
@@ -21,6 +27,9 @@ interface ChantierBudgetViewProps {
 export function ChantierBudgetView({ chantier, onNavigateTab }: ChantierBudgetViewProps) {
   const { activeOrg, myRole } = useOrg();
   const canManagePayments = myRole === 'owner' || myRole === 'admin';
+  const [dashboardCategory, setDashboardCategory] = useState<DashboardCategory | null>(
+    null
+  );
 
   const summary = useQuery({
     queryKey: ['budget-summary', activeOrg?.id, chantier.id],
@@ -41,6 +50,8 @@ export function ChantierBudgetView({ chantier, onNavigateTab }: ChantierBudgetVi
   const laborPct = chantier.budget_labor > 0 ? s.labor_spent / chantier.budget_labor : 0;
   const materialsPct =
     chantier.budget_materials > 0 ? s.materials_spent / chantier.budget_materials : 0;
+  const equipmentPct =
+    chantier.budget_equipment > 0 ? s.equipment_spent / chantier.budget_equipment : 0;
   const totalPct = chantier.budget_total > 0 ? s.total_spent / chantier.budget_total : 0;
   const paymentsPct =
     chantier.contract_value > 0 ? s.payments_received / chantier.contract_value : 0;
@@ -49,15 +60,15 @@ export function ChantierBudgetView({ chantier, onNavigateTab }: ChantierBudgetVi
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <BudgetBar
           label="Main d'œuvre"
           spent={s.labor_spent}
           budget={chantier.budget_labor}
           pct={laborPct}
           isLoading={summary.isLoading}
-          onClick={onNavigateTab ? () => onNavigateTab('pointage') : undefined}
-          cta="Voir le pointage →"
+          onClick={() => setDashboardCategory('labor')}
+          cta="Voir le détail →"
         />
         <BudgetBar
           label="Matériaux"
@@ -65,8 +76,17 @@ export function ChantierBudgetView({ chantier, onNavigateTab }: ChantierBudgetVi
           budget={chantier.budget_materials}
           pct={materialsPct}
           isLoading={summary.isLoading}
-          onClick={onNavigateTab ? () => onNavigateTab('consommables') : undefined}
-          cta="Voir la consommation →"
+          onClick={() => setDashboardCategory('materials')}
+          cta="Voir le détail →"
+        />
+        <BudgetBar
+          label="Matériels"
+          spent={s.equipment_spent}
+          budget={chantier.budget_equipment}
+          pct={equipmentPct}
+          isLoading={summary.isLoading}
+          onClick={() => setDashboardCategory('equipment')}
+          cta="Voir le détail →"
         />
         <BudgetBar
           label="Total"
@@ -74,16 +94,13 @@ export function ChantierBudgetView({ chantier, onNavigateTab }: ChantierBudgetVi
           budget={chantier.budget_total}
           pct={totalPct}
           isLoading={summary.isLoading}
+          onClick={() => setDashboardCategory('total')}
+          cta="Voir le tableau de bord →"
           emphasis
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <StatCard
-          label="Matériel (équipement)"
-          value={formatMAD(s.equipment_spent)}
-          subtitle="Suivi post-bêta"
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <StatCard
           label="Paiements reçus"
           value={formatMAD(s.payments_received)}
@@ -130,6 +147,14 @@ export function ChantierBudgetView({ chantier, onNavigateTab }: ChantierBudgetVi
           contractValue={chantier.contract_value}
         />
       )}
+
+      <BudgetCategoryDashboardModal
+        category={dashboardCategory}
+        chantier={chantier}
+        summary={s}
+        onClose={() => setDashboardCategory(null)}
+        onNavigateTab={onNavigateTab}
+      />
     </div>
   );
 }
@@ -214,31 +239,3 @@ function BudgetBar({
   return <div className="bati-card rounded-lg p-4">{inner}</div>;
 }
 
-const ACCENT_CLASS: Record<string, string> = {
-  teal: 'text-bati-teal',
-  terra: 'text-bati-terra',
-  success: 'text-bati-success',
-  muted: 'text-bati-text',
-};
-
-function StatCard({
-  label,
-  value,
-  subtitle,
-  accent = 'muted',
-}: {
-  label: string;
-  value: React.ReactNode;
-  subtitle?: string;
-  accent?: 'teal' | 'terra' | 'success' | 'muted';
-}) {
-  return (
-    <div className="bati-card rounded-lg p-4">
-      <div className="text-xs uppercase tracking-wide text-bati-muted">{label}</div>
-      <div className={`text-xl font-bold mt-2 tabular-nums ${ACCENT_CLASS[accent]}`}>
-        {value}
-      </div>
-      {subtitle && <div className="text-xs text-bati-muted mt-1">{subtitle}</div>}
-    </div>
-  );
-}

@@ -438,6 +438,8 @@ const DEMO_INVALIDATION_KEYS = [
   ['tasks'],
   ['consumables-items'],
   ['payments'],
+  ['materiels'],
+  ['deployments'],
 ];
 
 function DemoDataCard() {
@@ -453,7 +455,7 @@ function DemoDataCard() {
     mutationFn: () => seedDemoData(),
     onSuccess: async (counts) => {
       toast.success(
-        `Démo chargée — ${counts.chantiers} chantiers · ${counts.workers} ouvriers · ${counts.purchases} achats · ${counts.attendance} pointages · ${counts.tasks} tâches · ${counts.payments} paiements`
+        `Démo chargée — ${counts.chantiers} chantiers · ${counts.workers} ouvriers · ${counts.purchases} achats · ${counts.attendance} pointages · ${counts.tasks} tâches · ${counts.payments} paiements · ${counts.materiels} matériels · ${counts.deployments} déploiements`
       );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['demo-data-present'] }),
@@ -494,9 +496,9 @@ function DemoDataCard() {
           </h2>
           <p className="text-xs text-bati-muted mt-1 max-w-xl leading-relaxed">
             Crée 2 chantiers (un terminé en dépassement, un en cours sain), 6 ouvriers,
-            2 fournisseurs, 8 articles, 4 achats et plusieurs semaines de pointage et
-            de consommation. Idéal pour vérifier que chaque écran affiche des chiffres
-            cohérents.
+            2 fournisseurs, 8 articles, 4 achats, 5 matériels, plusieurs semaines de
+            pointage / consommation / déploiements, et les paiements client associés.
+            Idéal pour vérifier que chaque écran affiche des chiffres cohérents.
           </p>
           <p className="text-xs text-bati-muted mt-1">
             État&nbsp;:{' '}
