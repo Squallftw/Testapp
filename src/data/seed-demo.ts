@@ -1,8 +1,9 @@
 /**
- * Dev-only demo seeder. Creates two coherent chantiers (one completed and
- * over-budget, one active and healthy) plus the shared org-wide pool of
- * workers, suppliers, items, and purchases needed to populate every screen
- * with realistic, internally-consistent numbers.
+ * Dev-only demo seeder. Creates four coherent chantiers (one completed,
+ * one healthy active, one overdue/over-budget/cash-tight, one burning fast
+ * with a consumption spike) plus the shared org-wide pool of workers,
+ * suppliers, items, and purchases. The numbers are engineered so that once
+ * the Watchdog cron fires, every alert rule lights up at least once.
  *
  * Lives in src/data/ because:
  *   - it speaks directly to Supabase for the bulk-cleanup path (the ESLint
@@ -42,6 +43,8 @@ export const DEMO_NAME_PREFIX = 'Démo · ';
 
 const ATELIER_NAME = `${DEMO_NAME_PREFIX}Rénovation Atelier Sidi Maarouf`;
 const VILLA_NAME = `${DEMO_NAME_PREFIX}Villa Anfa, Casablanca`;
+const RESIDENCE_NAME = `${DEMO_NAME_PREFIX}Résidence Salam, Salé`;
+const SHOWROOM_NAME = `${DEMO_NAME_PREFIX}Showroom Auto Maarif`;
 
 export interface SeedCounts {
   chantiers: number;
@@ -125,6 +128,24 @@ export async function seedDemoData(): Promise<SeedCounts> {
   counts.tasks += await seedVillaPlanning(villa, workers);
   counts.payments += await seedVillaPayments(villa);
   counts.deployments += await seedVillaDeployments(villa, materielsPool);
+
+  const residence = await createResidenceChantier();
+  counts.chantiers += 1;
+  const residenceStats = await seedResidenceActivity(residence, workers, items);
+  counts.attendance += residenceStats.attendance;
+  counts.consumption += residenceStats.consumption;
+  counts.tasks += await seedResidencePlanning(residence, workers);
+  counts.payments += await seedResidencePayments(residence);
+  counts.deployments += await seedResidenceDeployments(residence, materielsPool);
+
+  const showroom = await createShowroomChantier();
+  counts.chantiers += 1;
+  const showroomStats = await seedShowroomActivity(showroom, workers, items);
+  counts.attendance += showroomStats.attendance;
+  counts.consumption += showroomStats.consumption;
+  counts.tasks += await seedShowroomPlanning(showroom, workers);
+  counts.payments += await seedShowroomPayments(showroom);
+  counts.deployments += await seedShowroomDeployments(showroom, materielsPool);
 
   return counts;
 }
@@ -228,6 +249,51 @@ async function seedVillaDeployments(
   return deps.length;
 }
 
+async function seedResidenceDeployments(
+  residence: Chantier,
+  pool: MaterielsPool
+): Promise<number> {
+  // Active chantier dragging on past planned end. Equipment costs blow
+  // through the 8 000 MAD budget (~10 590 MAD spent → 132 % → critical).
+  const deps = [
+    { mat: pool.echafaudage, start: 50, end: 5, qty: 1 }, // 46 j × 180 = 8 280
+    { mat: pool.betonniere, start: 55, end: 40, qty: 1 }, // 16 j × 60 = 960
+    { mat: pool.camionBenne, start: 45, end: 43, qty: 1 }, // 3 j × 450 = 1 350
+  ];
+  for (const d of deps) {
+    await createDeployment({
+      materiel_id: d.mat.id,
+      chantier_id: residence.id,
+      start_date: isoDaysAgo(d.start),
+      end_date: isoDaysAgo(d.end),
+      qty: d.qty,
+    });
+  }
+  return deps.length;
+}
+
+async function seedShowroomDeployments(
+  showroom: Chantier,
+  pool: MaterielsPool
+): Promise<number> {
+  // Active chantier, equipment well under its 15 000 MAD budget (~3 380).
+  const deps = [
+    { mat: pool.marteauPiqueur, start: 20, end: 16, qty: 1 }, // démolition
+    { mat: pool.betonniere, start: 18, end: 4, qty: 1 }, // gros œuvre
+    { mat: pool.generateur, start: 18, end: 0, qty: 1 }, // alim chantier ongoing
+  ];
+  for (const d of deps) {
+    await createDeployment({
+      materiel_id: d.mat.id,
+      chantier_id: showroom.id,
+      start_date: isoDaysAgo(d.start),
+      end_date: isoDaysAgo(d.end),
+      qty: d.qty,
+    });
+  }
+  return deps.length;
+}
+
 // ─── Payments ───────────────────────────────────────────────────────────
 
 async function seedAtelierPayments(atelier: Chantier): Promise<number> {
@@ -267,6 +333,34 @@ async function seedVillaPayments(villa: Chantier): Promise<number> {
     });
   }
   return installments.length;
+}
+
+async function seedResidencePayments(residence: Chantier): Promise<number> {
+  // Client only paid a small acompte — drives cash_negative warning
+  // (40 000 received / ~110 000 spent ≈ 36 %, well below the 70 % floor).
+  await createPayment({
+    chantier_id: residence.id,
+    payment_date: isoDaysAgo(45),
+    amount: 40000,
+    reference: 'Acompte démarrage — Virement CIH',
+    attachment_url: null,
+    notes: null,
+  });
+  return 1;
+}
+
+async function seedShowroomPayments(showroom: Chantier): Promise<number> {
+  // 30 % acompte — 39 000 / ~55 000 spent ≈ 71 %, just above the 70 % floor
+  // so cash_negative stays silent on this chantier (Résidence is the example).
+  await createPayment({
+    chantier_id: showroom.id,
+    payment_date: isoDaysAgo(15),
+    amount: 39000,
+    reference: 'Acompte 30% — Virement BMCE',
+    attachment_url: null,
+    notes: null,
+  });
+  return 1;
 }
 
 interface SharedPool {
@@ -432,7 +526,7 @@ async function createSharedPool(): Promise<SharedPool> {
     unit: 'm²',
     average_price: 95,
     default_supplier_id: quincaillerie.id,
-    reorder_threshold: 10,
+    reorder_threshold: 20,
     has_expiry: false,
     notes: null,
   });
@@ -442,7 +536,7 @@ async function createSharedPool(): Promise<SharedPool> {
     unit: 'pot',
     average_price: 320,
     default_supplier_id: quincaillerie.id,
-    reorder_threshold: 2,
+    reorder_threshold: 5,
     has_expiry: true,
     notes: null,
   });
@@ -523,7 +617,46 @@ async function createPurchases(
       { item_id: items.cable.id, qty: 200, unit_price: 9, total: 1800 },
     ],
   });
-  return 4;
+  // P5 — stockage pour Résidence + Showroom. Sable bumped from 6 → 12 m³ so
+  // the consumed/on-hand math leaves sable comfortably above its threshold
+  // of 3 m³ (purchased 24, consumed 18, on-hand 6) and doesn't fire a
+  // spurious stock_low on a non-target item.
+  await createPurchase({
+    supplier_id: suppliers.ciments.id,
+    purchased_at: isoDaysAgo(50),
+    payment_status: 'paid',
+    invoice_ref: 'CDM-2024-0125',
+    notes: 'Stockage pour Résidence Salam et Showroom Maarif.',
+    lines: [
+      { item_id: items.ciment.id, qty: 250, unit_price: 78, total: 19500 },
+      { item_id: items.sable.id, qty: 12, unit_price: 180, total: 2160 },
+      { item_id: items.gravier.id, qty: 4, unit_price: 220, total: 880 },
+    ],
+  });
+  // P6 — pending 35 days old → supplier_purchase_aging warning.
+  await createPurchase({
+    supplier_id: suppliers.quincaillerie.id,
+    purchased_at: isoDaysAgo(35),
+    payment_status: 'pending',
+    invoice_ref: 'QH-2024-0201',
+    notes: 'Acier + briques Résidence Salam — paiement à 60 jours convenu.',
+    lines: [
+      { item_id: items.acier.id, qty: 800, unit_price: 14, total: 11200 },
+      { item_id: items.brique.id, qty: 2000, unit_price: 2.5, total: 5000 },
+    ],
+  });
+  // P7 — pending 65 days old → supplier_purchase_aging critical.
+  await createPurchase({
+    supplier_id: suppliers.ciments.id,
+    purchased_at: isoDaysAgo(65),
+    payment_status: 'pending',
+    invoice_ref: 'CDM-2024-0098',
+    notes: 'Facture en attente — relance fournisseur faite.',
+    lines: [
+      { item_id: items.ciment.id, qty: 150, unit_price: 78, total: 11700 },
+    ],
+  });
+  return 7;
 }
 
 // ─── Chantier A — Atelier (completed, over budget) ──────────────────────
@@ -766,6 +899,333 @@ async function seedVillaActivity(
   return { attendance: rows.length, consumption: 5 };
 }
 
+// ─── Chantier C — Résidence Salam (overdue, over-budget, cash-tight) ────
+
+async function createResidenceChantier(): Promise<Chantier> {
+  const palette = CHANTIER_COLOR_PALETTE[2]!;
+  return createChantier({
+    name: RESIDENCE_NAME,
+    type: 'Construction neuve',
+    color: palette.color,
+    color_soft: palette.soft,
+    client_name: 'Promoteur Salam Habitat',
+    manager_name: null,
+    manager_user_id: null,
+    address: 'Lotissement Salam, Salé',
+    date_start: isoDaysAgo(60),
+    date_end_prev: isoDaysAgo(10), // 10 days past planned end → chantier_overdue critical
+    budget_total: 150000,
+    budget_labor: 75000, // exceeded (~76 k spent)
+    budget_materials: 50000, // stays under (~24 k)
+    budget_equipment: 8000, // exceeded (~10.6 k → critical)
+    contract_value: 180000,
+    status: 'active',
+  });
+}
+
+async function seedResidenceActivity(
+  chantier: Chantier,
+  workers: SharedPool['workers'],
+  items: SharedPool['items']
+): Promise<{ attendance: number; consumption: number }> {
+  const days = workingDaysBetween(60, 0); // ~52 working days
+  const team = [
+    workers.hassan,
+    workers.mohamed,
+    workers.youssef,
+    workers.karim,
+    workers.said,
+  ];
+
+  // 3 absences per worker (15 total). Trimmed from the original ~4 pattern
+  // so the labour cost lands cleanly above the 75 000 MAD budget rather
+  // than just under it; the absence rate (~6 %) is still realistic.
+  const absencePattern: Record<string, number[]> = {
+    [workers.hassan.id]: [5, 18, 32],
+    [workers.mohamed.id]: [3, 14, 26],
+    [workers.youssef.id]: [7, 19, 31],
+    [workers.karim.id]: [9, 22, 35],
+    [workers.said.id]: [4, 16, 28],
+  };
+  const ABSENCE_REASONS = ['maladie', 'pas_venu', 'conge', 'autre'];
+
+  const rows: UpsertAttendanceInput[] = [];
+  for (const worker of team) {
+    const absent = absencePattern[worker.id] ?? [];
+    for (let i = 0; i < days.length; i++) {
+      const date = days[i];
+      if (!date) continue;
+      const absIdx = absent.indexOf(i);
+      const isAbsent = absIdx >= 0;
+      rows.push({
+        chantier_id: chantier.id,
+        worker_id: worker.id,
+        attendance_date: date,
+        status: isAbsent ? 'A' : 'P',
+        absence_reason: isAbsent ? (ABSENCE_REASONS[absIdx % 4] ?? 'autre') : null,
+        prime_amount: 0,
+        prime_motif: null,
+        note: null,
+      });
+    }
+  }
+
+  // Primes (hassan moved to day[10] to avoid clashing with his day[5] absence).
+  applyPrime(rows, workers.hassan.id, days[10], 150, 'Suivi de chantier');
+  applyPrime(rows, workers.mohamed.id, days[15], 100, 'Heures supplémentaires');
+  applyPrime(rows, workers.youssef.id, days[25], 100, 'Pose carrelage');
+  applyPrime(rows, workers.said.id, days[35], 200, 'Tableau électrique complet');
+  applyPrime(rows, workers.karim.id, days[45], 80, 'Travail soigné');
+
+  await bulkUpsertAttendance(rows);
+
+  // Consumption — 8 events sized to drain peinture (0 on-hand → stock_low
+  // critical) and carrelage (5 on-hand → stock_low warning) from the
+  // shared pool once the Showroom chantier consumes its share too.
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.ciment.id,
+    qty: 120,
+    used_at: isoDaysAgo(55),
+    is_loss: false,
+    notes: 'Fondations',
+  });
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.sable.id,
+    qty: 6,
+    used_at: isoDaysAgo(52),
+    is_loss: false,
+    notes: 'Mortier',
+  });
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.gravier.id,
+    qty: 3,
+    used_at: isoDaysAgo(50),
+    is_loss: false,
+    notes: 'Béton dalle',
+  });
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.brique.id,
+    qty: 1200,
+    used_at: isoDaysAgo(35),
+    is_loss: false,
+    notes: 'Cloisons + murs intérieurs',
+  });
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.acier.id,
+    qty: 450,
+    used_at: isoDaysAgo(40),
+    is_loss: false,
+    notes: 'Armatures',
+  });
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.carrelage.id,
+    qty: 18,
+    used_at: isoDaysAgo(15),
+    is_loss: false,
+    notes: 'Carrelage salons',
+  });
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.cable.id,
+    qty: 120,
+    used_at: isoDaysAgo(20),
+    is_loss: false,
+    notes: 'Câblage électrique',
+  });
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.peinture.id,
+    qty: 2,
+    used_at: isoDaysAgo(8),
+    is_loss: false,
+    notes: 'Apprêt murs intérieurs',
+  });
+
+  return { attendance: rows.length, consumption: 8 };
+}
+
+// ─── Chantier D — Showroom Auto Maarif (active, burning fast) ───────────
+
+async function createShowroomChantier(): Promise<Chantier> {
+  const palette = CHANTIER_COLOR_PALETTE[3]!;
+  return createChantier({
+    name: SHOWROOM_NAME,
+    type: 'Aménagement commercial',
+    color: palette.color,
+    color_soft: palette.soft,
+    client_name: 'Auto Distribution Maarif SARL',
+    manager_name: null,
+    manager_user_id: null,
+    address: 'Boulevard Zerktouni, Maarif, Casablanca',
+    date_start: isoDaysAgo(21),
+    date_end_prev: isoDaysAgo(-60),
+    budget_total: 100000,
+    budget_labor: 50000,
+    budget_materials: 35000,
+    budget_equipment: 15000,
+    contract_value: 130000,
+    status: 'active',
+  });
+}
+
+async function seedShowroomActivity(
+  chantier: Chantier,
+  workers: SharedPool['workers'],
+  items: SharedPool['items']
+): Promise<{ attendance: number; consumption: number }> {
+  const days = workingDaysBetween(21, 0); // ~19 working days
+  const team = [
+    workers.hassan,
+    workers.mohamed,
+    workers.youssef,
+    workers.karim,
+    workers.rachid,
+  ];
+
+  // Light absence pattern — chantier only ran for ~3 weeks.
+  const absencePattern: Record<string, number[]> = {
+    [workers.hassan.id]: [3],
+    [workers.mohamed.id]: [7],
+    [workers.youssef.id]: [10],
+    [workers.karim.id]: [5, 14],
+    [workers.rachid.id]: [12],
+  };
+  const ABSENCE_REASONS = ['maladie', 'pas_venu', 'conge', 'autre'];
+
+  const rows: UpsertAttendanceInput[] = [];
+  for (const worker of team) {
+    const absent = absencePattern[worker.id] ?? [];
+    for (let i = 0; i < days.length; i++) {
+      const date = days[i];
+      if (!date) continue;
+      const absIdx = absent.indexOf(i);
+      const isAbsent = absIdx >= 0;
+      rows.push({
+        chantier_id: chantier.id,
+        worker_id: worker.id,
+        attendance_date: date,
+        status: isAbsent ? 'A' : 'P',
+        absence_reason: isAbsent ? (ABSENCE_REASONS[absIdx % 4] ?? 'autre') : null,
+        prime_amount: 0,
+        prime_motif: null,
+        note: null,
+      });
+    }
+  }
+
+  applyPrime(rows, workers.hassan.id, days[8], 100, 'Coordination chantier');
+  applyPrime(rows, workers.mohamed.id, days[12], 80, 'Démolition rapide');
+  applyPrime(rows, workers.rachid.id, days[15], 60, 'Pose réseau eau');
+
+  await bulkUpsertAttendance(rows);
+
+  // Consumption — three spread-out ciment events plus a today-spike for
+  // consumption_anomaly. Today's qty bumped from 100 → 150 sacs so that
+  // even after Villa's 80-sac entry at day −22 inflates the 30-day avg
+  // (∼43 sacs/day), the ratio still clears the 3× threshold.
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.ciment.id,
+    qty: 30,
+    used_at: isoDaysAgo(18),
+    is_loss: false,
+    notes: 'Coulage dalle entrée',
+  });
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.ciment.id,
+    qty: 30,
+    used_at: isoDaysAgo(10),
+    is_loss: false,
+    notes: 'Murs porteurs intérieurs',
+  });
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.ciment.id,
+    qty: 30,
+    used_at: isoDaysAgo(4),
+    is_loss: false,
+    notes: 'Finition sol béton',
+  });
+  // TODAY — the anomaly spike (150 vs ~43 avg = ~3.5×, floor sac=5).
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.ciment.id,
+    qty: 150,
+    used_at: isoDaysAgo(0),
+    is_loss: false,
+    notes: 'Coulage massif fondations colonnes (livraison express)',
+  });
+
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.sable.id,
+    qty: 5,
+    used_at: isoDaysAgo(15),
+    is_loss: false,
+    notes: 'Mortier',
+  });
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.brique.id,
+    qty: 400,
+    used_at: isoDaysAgo(12),
+    is_loss: false,
+    notes: 'Cloisons showroom',
+  });
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.acier.id,
+    qty: 150,
+    used_at: isoDaysAgo(8),
+    is_loss: false,
+    notes: 'Armatures colonnes',
+  });
+  // Carrelage — completes the stock_low math (Résidence 18 + Showroom 7 = 25; 30 − 25 = 5).
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.carrelage.id,
+    qty: 7,
+    used_at: isoDaysAgo(3),
+    is_loss: false,
+    notes: 'Échantillonnage zone exposition',
+  });
+  // Peinture — completes the stock_low math (Résidence 2 + Showroom 2 = 4; 4 − 4 = 0).
+  await createConsumption({
+    chantier_id: chantier.id,
+    task_id: null,
+    item_id: items.peinture.id,
+    qty: 2,
+    used_at: isoDaysAgo(6),
+    is_loss: false,
+    notes: 'Apprêt cloisons',
+  });
+
+  return { attendance: rows.length, consumption: 10 };
+}
+
 function applyPrime(
   rows: UpsertAttendanceInput[],
   workerId: string,
@@ -853,6 +1313,77 @@ async function seedVillaPlanning(
     assignee_worker_ids: [workers.said.id],
   });
   return 5;
+}
+
+async function seedResidencePlanning(
+  chantier: Chantier,
+  workers: SharedPool['workers']
+): Promise<number> {
+  // Three flat tasks. "Finitions intérieures" finishes 5 days late → warning.
+  await createTask({
+    chantier_id: chantier.id,
+    label: 'Gros œuvre',
+    start_date: isoDaysAgo(58),
+    duration_days: 30,
+    status: 'done',
+    sort_order: 0,
+    assignee_worker_ids: [workers.hassan.id, workers.mohamed.id, workers.youssef.id],
+  });
+  await createTask({
+    chantier_id: chantier.id,
+    label: 'Plomberie',
+    start_date: isoDaysAgo(25),
+    duration_days: 30,
+    status: 'ongoing',
+    sort_order: 1,
+    assignee_worker_ids: [workers.karim.id],
+  });
+  // start −22, duration 18 → end on day −5 → 5 days late.
+  await createTask({
+    chantier_id: chantier.id,
+    label: 'Finitions intérieures',
+    start_date: isoDaysAgo(22),
+    duration_days: 18,
+    status: 'ongoing',
+    sort_order: 2,
+    assignee_worker_ids: [workers.youssef.id, workers.said.id],
+  });
+  return 3;
+}
+
+async function seedShowroomPlanning(
+  chantier: Chantier,
+  workers: SharedPool['workers']
+): Promise<number> {
+  await createTask({
+    chantier_id: chantier.id,
+    label: 'Démolition existant',
+    start_date: isoDaysAgo(21),
+    duration_days: 5,
+    status: 'done',
+    sort_order: 0,
+    assignee_worker_ids: [workers.mohamed.id, workers.karim.id],
+  });
+  // start −15, duration 10 → end on day −6 → 6 days late → warning.
+  await createTask({
+    chantier_id: chantier.id,
+    label: 'Gros œuvre intérieur',
+    start_date: isoDaysAgo(15),
+    duration_days: 10,
+    status: 'ongoing',
+    sort_order: 1,
+    assignee_worker_ids: [workers.hassan.id, workers.mohamed.id, workers.youssef.id],
+  });
+  await createTask({
+    chantier_id: chantier.id,
+    label: 'Façade vitrée',
+    start_date: isoDaysAgo(-10),
+    duration_days: 14,
+    status: 'todo',
+    sort_order: 2,
+    assignee_worker_ids: [workers.hassan.id],
+  });
+  return 3;
 }
 
 // ─── clear ──────────────────────────────────────────────────────────────
