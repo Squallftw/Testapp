@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -8,30 +9,38 @@ import { PublicRoute } from '@/components/PublicRoute';
 import { AppShell } from '@/components/AppShell';
 import { RequireRole } from '@/components/RequireRole';
 import { Toaster } from '@/components/ui/Toast';
-import LoginPage from '@/pages/auth/LoginPage';
-import SignupPage from '@/pages/auth/SignupPage';
-import ResetPasswordPage from '@/pages/auth/ResetPasswordPage';
-import UpdatePasswordPage from '@/pages/auth/UpdatePasswordPage';
-import AuthCallbackPage from '@/pages/auth/AuthCallbackPage';
-import CreateOrgPage from '@/pages/org/CreateOrgPage';
-import HomePage from '@/pages/HomePage';
-import ChantiersListPage from '@/pages/chantiers/ChantiersListPage';
-import ChantierDetailPage from '@/pages/chantiers/ChantierDetailPage';
-import ChantierEditPage from '@/pages/chantiers/ChantierEditPage';
-import WorkersListPage from '@/pages/workers/WorkersListPage';
-import WorkerEditPage from '@/pages/workers/WorkerEditPage';
-import OrgSettingsPage from '@/pages/settings/OrgSettingsPage';
-import MembersPage from '@/pages/settings/MembersPage';
-import PointagePage from '@/pages/pointage/PointagePage';
-import ConsommablesLayout from '@/pages/consommables/ConsommablesLayout';
-import ArticlesPage from '@/pages/consommables/ArticlesPage';
-import SuppliersPage from '@/pages/consommables/SuppliersPage';
-import PurchasesPage from '@/pages/consommables/PurchasesPage';
-import ConsumptionPage from '@/pages/consommables/ConsumptionPage';
-import MovementsPage from '@/pages/consommables/MovementsPage';
-import PlanningPage from '@/pages/planning/PlanningPage';
-import MaterielsListPage from '@/pages/materiels/MaterielsListPage';
-import PublicChantierPage from '@/pages/public/PublicChantierPage';
+
+// Every page component is route-split via React.lazy so a visitor only
+// downloads the chunk for the URL they hit. Critical for the public viral
+// surface at /c/:slug (spec §4.2): WhatsApp taps come from real Moroccan
+// mobile networks where the prior single-bundle ~374 kB gzip would have
+// killed the conversion. The shell (Auth/Org/Chantier providers, layout
+// guards, the Toaster) stays static — it's the < 50 kB skeleton that
+// every route shares.
+const LoginPage          = lazy(() => import('@/pages/auth/LoginPage'));
+const SignupPage         = lazy(() => import('@/pages/auth/SignupPage'));
+const ResetPasswordPage  = lazy(() => import('@/pages/auth/ResetPasswordPage'));
+const UpdatePasswordPage = lazy(() => import('@/pages/auth/UpdatePasswordPage'));
+const AuthCallbackPage   = lazy(() => import('@/pages/auth/AuthCallbackPage'));
+const CreateOrgPage      = lazy(() => import('@/pages/org/CreateOrgPage'));
+const HomePage           = lazy(() => import('@/pages/HomePage'));
+const ChantiersListPage  = lazy(() => import('@/pages/chantiers/ChantiersListPage'));
+const ChantierDetailPage = lazy(() => import('@/pages/chantiers/ChantierDetailPage'));
+const ChantierEditPage   = lazy(() => import('@/pages/chantiers/ChantierEditPage'));
+const WorkersListPage    = lazy(() => import('@/pages/workers/WorkersListPage'));
+const WorkerEditPage     = lazy(() => import('@/pages/workers/WorkerEditPage'));
+const OrgSettingsPage    = lazy(() => import('@/pages/settings/OrgSettingsPage'));
+const MembersPage        = lazy(() => import('@/pages/settings/MembersPage'));
+const PointagePage       = lazy(() => import('@/pages/pointage/PointagePage'));
+const ConsommablesLayout = lazy(() => import('@/pages/consommables/ConsommablesLayout'));
+const ArticlesPage       = lazy(() => import('@/pages/consommables/ArticlesPage'));
+const SuppliersPage      = lazy(() => import('@/pages/consommables/SuppliersPage'));
+const PurchasesPage      = lazy(() => import('@/pages/consommables/PurchasesPage'));
+const ConsumptionPage    = lazy(() => import('@/pages/consommables/ConsumptionPage'));
+const MovementsPage      = lazy(() => import('@/pages/consommables/MovementsPage'));
+const PlanningPage       = lazy(() => import('@/pages/planning/PlanningPage'));
+const MaterielsListPage  = lazy(() => import('@/pages/materiels/MaterielsListPage'));
+const PublicChantierPage = lazy(() => import('@/pages/public/PublicChantierPage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -60,8 +69,17 @@ export default function App() {
             {/* Public chantier client view — anonymous, no OrgProvider /
                 ChantierProvider. Reachable by anyone with the shareable URL
                 (`/c/<slug>`); reads go through the `get_public_chantier`
-                anon RPC. See docs/superpowers/specs/2026-05-18-public-chantier-pages-design.md */}
-            <Route path="/c/:slug" element={<PublicChantierPage />} />
+                anon RPC. See docs/superpowers/specs/2026-05-18-public-chantier-pages-design.md
+                The Suspense fallback paints parchment so the first frame
+                after the main chunk loads never flashes the default body bg. */}
+            <Route
+              path="/c/:slug"
+              element={
+                <Suspense fallback={<div style={{ minHeight: '100vh', background: '#f6efe1' }} />}>
+                  <PublicChantierPage />
+                </Suspense>
+              }
+            />
 
             {/* All other routes share the org + chantier provider stack. */}
             <Route element={<AppProvidersOutlet />}>
@@ -130,11 +148,15 @@ export default function App() {
 // Layout outlet that provides the OrgProvider + ChantierProvider stack to
 // every app route that needs an active org. Kept private to App.tsx — the
 // /c/:slug public route deliberately sits outside this wrapper.
+// The inner Suspense catches lazy-loaded admin pages during navigation;
+// fallback is transparent so the AppShell stays visible underneath.
 function AppProvidersOutlet() {
   return (
     <OrgProvider>
       <ChantierProvider>
-        <Outlet />
+        <Suspense fallback={null}>
+          <Outlet />
+        </Suspense>
       </ChantierProvider>
     </OrgProvider>
   );
