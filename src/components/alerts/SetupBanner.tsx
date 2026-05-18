@@ -67,6 +67,33 @@ export function SetupBanner() {
     },
   });
 
+  /** Heuristic: classify the recompute error so the banner can suggest the right fix. */
+  function recomputeHint(run: string | null): React.ReactNode {
+    if (!run) return null;
+    if (run.startsWith('Succès')) {
+      return <p className="text-bati-success">{run}</p>;
+    }
+    const isUnreachable =
+      /Failed to send a request|Failed to fetch|NetworkError|ENOTFOUND|404/i.test(run);
+    return (
+      <>
+        <p className="text-bati-terra">{run}</p>
+        {isUnreachable && (
+          <p className="text-bati-muted">
+            La Edge Function <code className="font-mono">recompute-alerts</code> n&apos;est
+            probablement pas déployée. Lancez cette commande dans un terminal à la racine
+            du projet :
+            <br />
+            <code className="font-mono">{DEPLOY_CMD}</code>
+            <br />
+            Si elle est déjà déployée, redéployez-la pour récupérer le correctif CORS
+            (commit le plus récent de <code className="font-mono">supabase/functions/recompute-alerts/index.ts</code>).
+          </p>
+        )}
+      </>
+    );
+  }
+
   const recomputeButton = (
     <button
       type="button"
@@ -128,22 +155,12 @@ export function SetupBanner() {
               Le module est activé mais le moteur n&apos;a encore enregistré aucune alerte. Le calcul
               automatique a lieu toutes les 15 minutes via <code className="font-mono">pg_cron</code>.
             </p>
-            {isDev && lastRun && (
-              <p className={lastRun.startsWith('Succès') ? 'text-bati-success' : 'text-bati-terra'}>
-                {lastRun}
-              </p>
-            )}
+            {isDev && recomputeHint(lastRun)}
             {!isDev && (
               <p className="text-bati-muted">
                 Si aucune alerte n&apos;apparaît après 15 min, vérifiez le job{' '}
                 <code className="font-mono">recompute-alerts</code> dans{' '}
                 <code className="font-mono">cron.job_run_details</code>.
-              </p>
-            )}
-            {isDev && lastRun?.includes('404') && (
-              <p className="text-bati-muted">
-                La Edge Function n&apos;est pas déployée. Lancez :{' '}
-                <code className="font-mono">{DEPLOY_CMD}</code>
               </p>
             )}
           </>
@@ -163,13 +180,7 @@ export function SetupBanner() {
         tone="success"
         title={`${health.data.activeCount} alerte${health.data.activeCount > 1 ? 's' : ''} active${health.data.activeCount > 1 ? 's' : ''} · dernier calcul ${lastSeen}`}
         action={isDev ? recomputeButton : undefined}
-        detail={
-          isDev && lastRun ? (
-            <p className={lastRun.startsWith('Succès') ? 'text-bati-success' : 'text-bati-terra'}>
-              {lastRun}
-            </p>
-          ) : undefined
-        }
+        detail={isDev ? recomputeHint(lastRun) : undefined}
       />
     );
   }
