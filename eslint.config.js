@@ -7,7 +7,18 @@ import globals from 'globals';
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'node_modules', 'coverage', 'supabase/.branches', 'supabase/.temp'],
+    ignores: [
+      'dist',
+      'node_modules',
+      'coverage',
+      'supabase/.branches',
+      'supabase/.temp',
+      // Deno edge functions — not part of the Vite/TS frontend, run under a
+      // different runtime (Deno) and intentionally use `any` in their IO
+      // glue. They have their own typing story and shouldn't trip the
+      // project's frontend lint rules.
+      'supabase/functions/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

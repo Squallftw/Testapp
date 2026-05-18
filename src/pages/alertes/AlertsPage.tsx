@@ -92,7 +92,7 @@ export default function AlertsPage() {
             checked={showHistory}
             onChange={(e) => setShowHistory(e.target.checked)}
           />
-          Voir l'historique
+          Voir l&apos;historique
         </label>
       </div>
 

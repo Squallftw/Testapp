@@ -8,6 +8,7 @@ import {
   type Chantier,
   type ChantierStatus,
 } from '@/data/chantiers';
+import { listActiveAlerts } from '@/data/alerts';
 import { useOrg } from '@/contexts/OrgContext';
 import { DataTable } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -38,6 +39,26 @@ export default function ChantiersListPage() {
     enabled: !!activeOrg,
   });
 
+  // Per-chantier alert pill: one query, fan out into a Map by chantier_id.
+  // Org-wide alerts (chantier_id NULL) are intentionally ignored here — the
+  // row pill is only meaningful for chantier-scoped detections.
+  const allAlerts = useQuery({
+    queryKey: ['alerts', 'active', activeOrg?.id],
+    queryFn: listActiveAlerts,
+    enabled: !!activeOrg,
+    refetchInterval: 60_000,
+  });
+  const alertsByChantier = useMemo(() => {
+    const m = new Map<string, { critical: number; warning: number; info: number }>();
+    for (const a of allAlerts.data ?? []) {
+      if (!a.chantier_id) continue;
+      const e = m.get(a.chantier_id) ?? { critical: 0, warning: 0, info: 0 };
+      e[a.severity] += 1;
+      m.set(a.chantier_id, e);
+    }
+    return m;
+  }, [allAlerts.data]);
+
   const filtered = useMemo(() => {
     const all = query.data ?? [];
     if (statusFilter === 'all') return all;
@@ -60,14 +81,39 @@ export default function ChantiersListPage() {
       }),
       columnHelper.accessor('name', {
         header: 'Nom',
-        cell: (info) => (
-          <Link
-            to={`/chantiers/${info.row.original.id}`}
-            className="font-medium text-bati-text hover:text-bati-teal hover:underline"
-          >
-            {info.getValue()}
-          </Link>
-        ),
+        cell: (info) => {
+          const c = info.row.original;
+          const counts = alertsByChantier.get(c.id);
+          const total = counts
+            ? counts.critical + counts.warning + counts.info
+            : 0;
+          const pillClass = counts?.critical
+            ? 'bg-bati-terra text-white'
+            : counts?.warning
+              ? 'bg-bati-ochre text-white'
+              : counts?.info
+                ? 'bg-bati-border text-bati-muted'
+                : '';
+          return (
+            <span className="inline-flex items-center gap-2">
+              <Link
+                to={`/chantiers/${c.id}`}
+                className="font-medium text-bati-text hover:text-bati-teal hover:underline"
+              >
+                {info.getValue()}
+              </Link>
+              {total > 0 && (
+                <span
+                  className={`text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-full ${pillClass}`}
+                  aria-label={`${total} alerte${total > 1 ? 's' : ''} active${total > 1 ? 's' : ''}`}
+                  title={`${total} alerte${total > 1 ? 's' : ''} active${total > 1 ? 's' : ''}`}
+                >
+                  {total}
+                </span>
+              )}
+            </span>
+          );
+        },
       }),
       columnHelper.accessor('status', {
         header: 'Statut',
@@ -94,7 +140,7 @@ export default function ChantiersListPage() {
         ),
       }),
     ],
-    []
+    [alertsByChantier]
   );
 
   if (query.isError) {
