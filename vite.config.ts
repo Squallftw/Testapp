@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import checker from 'vite-plugin-checker';
+import { copyFileSync, existsSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 
 // Production CSP — verbatim from the security brief. No 'unsafe-eval', no
