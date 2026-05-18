@@ -6,7 +6,6 @@ import { useOrg } from '@/contexts/OrgContext';
 import { formatMAD, formatPercent } from '@/lib/format';
 import { PaymentsSection } from './PaymentsSection';
 import { StatCard } from './_shared';
-import { AlertsPanel } from '@/components/alerts/AlertsPanel';
 import {
   BudgetCategoryDashboardModal,
   type DashboardCategory,
@@ -61,7 +60,6 @@ export function ChantierBudgetView({ chantier, onNavigateTab }: ChantierBudgetVi
 
   return (
     <div className="space-y-4">
-      <AlertsPanel chantierId={chantier.id} />
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <BudgetBar
           label="Main d'œuvre"

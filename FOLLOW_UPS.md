@@ -272,20 +272,22 @@ feature.
 
 ### Per-chantier stock alerts
 
-- ✅ **Watchdog & Forecaster Phase 1** — `supabase/functions/recompute-alerts/`
-  is the Deno Edge Function that runs 8 rules (budget burn forecast, category
-  exceeded, chantier overdue, task overdue, stock low, cash negative, supplier
-  purchase aging, consumption anomaly) on a 15-min `pg_cron` schedule and
-  writes to the new `public.alerts` table. The 9th kind `daily_entry_missing`
-  is declared in the enum but its rule is Phase 2 (chef-du-chantier
-  end-of-day workflow). In-app surfaces: topbar bell, per-chantier panel,
-  HomePage section, full `/alertes` page. See
-  `docs/superpowers/specs/2026-05-18-watchdog-forecaster-design.md` and
-  `docs/superpowers/plans/2026-05-18-watchdog-forecaster.md`.
-  - Deployment runbook: `docs/runbooks/recompute-alerts.md`. The function
-    must be deployed via `supabase functions deploy recompute-alerts
-    --no-verify-jwt` and the cron job registered with the SQL block in the
-    runbook (replaces `<project-ref>` with the actual Supabase project ref).
+- 🚧 **Watchdog & Forecaster Phase 1** (backend on disk, frontend unwired)
+  — the Deno Edge Function and migration are committed but the in-app
+  surfaces (bell, panel, HomePage section, `/alertes` page) were removed
+  pending product decision. Backend assets that remain on disk and can be
+  re-wired later:
+  - `supabase/migrations/0007_alerts.sql` (table + dismiss/undismiss RPCs)
+  - `supabase/functions/recompute-alerts/` (Deno engine + 8 rule modules + tests)
+  - `supabase/tests/rls/alerts.sql` (pgTAP scope tests)
+  - `docs/runbooks/recompute-alerts.md` (deploy + cron registration)
+  - `docs/superpowers/specs/2026-05-18-watchdog-forecaster-design.md`
+  - `docs/superpowers/plans/2026-05-18-watchdog-forecaster.md`
+  To re-enable the frontend, restore the deleted files under
+  `src/components/alerts/`, `src/pages/alertes/`, and `src/data/alerts.ts`
+  from a previous commit (last full wiring was at commit `b1a0406`), then
+  re-add the route in `App.tsx`, the sidebar nav item, the topbar bell,
+  the HomePage section, and the per-chantier surfaces.
 
 ### Analytics / BI
 

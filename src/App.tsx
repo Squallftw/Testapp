@@ -31,7 +31,6 @@ import ConsumptionPage from '@/pages/consommables/ConsumptionPage';
 import MovementsPage from '@/pages/consommables/MovementsPage';
 import PlanningPage from '@/pages/planning/PlanningPage';
 import MaterielsListPage from '@/pages/materiels/MaterielsListPage';
-import AlertsPage from '@/pages/alertes/AlertsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -97,7 +96,6 @@ export default function App() {
                       <Route path="mouvements" element={<MovementsPage />} />
                     </Route>
                     <Route path="/materiels" element={<MaterielsListPage />} />
-                    <Route path="/alertes" element={<AlertsPage />} />
 
                     {/* Owner/admin-only routes */}
                     <Route element={<RequireRole roles={['owner', 'admin']} />}>

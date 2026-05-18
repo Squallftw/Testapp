@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getChantier, softDeleteChantier } from '@/data/chantiers';
-import { listAlertsForChantier } from '@/data/alerts';
 import { useChantier } from '@/contexts/ChantierContext';
 import { useOrg } from '@/contexts/OrgContext';
 import { StatusBadge } from '@/components/ui/StatusBadge';
@@ -36,7 +35,7 @@ export default function ChantierDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { activeOrg, myRole } = useOrg();
+  const { myRole } = useOrg();
   const { setActiveChantier } = useChantier();
   const [tab, setTab] = useState<Tab>('overview');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -48,14 +47,6 @@ export default function ChantierDetailPage() {
     queryFn: () => getChantier(id!),
     enabled: !!id,
   });
-
-  const alerts = useQuery({
-    queryKey: ['alerts', 'chantier', activeOrg?.id, id],
-    queryFn: () => listAlertsForChantier(id!),
-    enabled: !!activeOrg && !!id,
-    refetchInterval: 60_000,
-  });
-  const alertCount = alerts.data?.length ?? 0;
 
   const remove = useMutation({
     mutationFn: () => softDeleteChantier(id!),
@@ -112,16 +103,6 @@ export default function ChantierDetailPage() {
             <h1 className="text-2xl font-bold text-bati-text">{c.name}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-bati-muted">
               <StatusBadge status={c.status} />
-              {alertCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setTab('budget')}
-                  className="text-xs px-2 py-1 rounded-full bg-bati-terra/10 text-bati-terra hover:bg-bati-terra/20"
-                >
-                  {alertCount} alerte{alertCount > 1 ? 's' : ''} active
-                  {alertCount > 1 ? 's' : ''} →
-                </button>
-              )}
               {c.type && <span>{c.type}</span>}
               {c.client_name && (
                 <>

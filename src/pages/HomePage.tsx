@@ -16,7 +16,6 @@ import { toast } from '@/components/ui/Toast';
 import { ChantierScoreCard } from '@/components/dashboard/ChantierScoreCard';
 import { DashboardKpiStrip } from '@/components/dashboard/DashboardKpiStrip';
 import { PausedChantiersStrip } from '@/components/dashboard/PausedChantiersStrip';
-import { AlertesSection } from '@/components/alerts/AlertesSection';
 import {
   ActiveChantiersDetail,
   AlertsDetail,
@@ -291,8 +290,6 @@ export default function HomePage() {
               />
             </KpiDetailPanel>
           )}
-
-          <AlertesSection />
 
           {activeChantiers.length === 0 ? (
             <EmptyState

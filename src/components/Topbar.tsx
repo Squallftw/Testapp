@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrg } from '@/contexts/OrgContext';
 import { toast } from '@/components/ui/Toast';
-import { AlertsBell } from '@/components/alerts/AlertsBell';
 
 interface TopbarProps {
   onOpenSidebar: () => void;
@@ -76,7 +75,6 @@ export function Topbar({ onOpenSidebar }: TopbarProps) {
       </div>
 
       <div className="relative flex items-center gap-2">
-        <AlertsBell />
         <button
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
