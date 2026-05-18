@@ -272,9 +272,20 @@ feature.
 
 ### Per-chantier stock alerts
 
-- 🔵 `consumables_items.reorder_threshold` exists but no alert engine.
-  Background job (Supabase Edge Function on schedule) that emails managers
-  when stock crosses threshold.
+- ✅ **Watchdog & Forecaster Phase 1** — `supabase/functions/recompute-alerts/`
+  is the Deno Edge Function that runs 8 rules (budget burn forecast, category
+  exceeded, chantier overdue, task overdue, stock low, cash negative, supplier
+  purchase aging, consumption anomaly) on a 15-min `pg_cron` schedule and
+  writes to the new `public.alerts` table. The 9th kind `daily_entry_missing`
+  is declared in the enum but its rule is Phase 2 (chef-du-chantier
+  end-of-day workflow). In-app surfaces: topbar bell, per-chantier panel,
+  HomePage section, full `/alertes` page. See
+  `docs/superpowers/specs/2026-05-18-watchdog-forecaster-design.md` and
+  `docs/superpowers/plans/2026-05-18-watchdog-forecaster.md`.
+  - Deployment runbook: `docs/runbooks/recompute-alerts.md`. The function
+    must be deployed via `supabase functions deploy recompute-alerts
+    --no-verify-jwt` and the cron job registered with the SQL block in the
+    runbook (replaces `<project-ref>` with the actual Supabase project ref).
 
 ### Analytics / BI
 
