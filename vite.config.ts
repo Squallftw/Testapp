@@ -69,6 +69,23 @@ export default defineConfig(({ command }) => ({
         );
       },
     },
+    {
+      // GitHub Pages serves files, not routes — a deep URL like
+      // /Testapp/c/villa-anfa would 404 because no c/villa-anfa/index.html
+      // exists. Pages falls back to /404.html for any unknown path, so
+      // we emit a 404.html that's byte-identical to index.html: the SPA
+      // mounts, React Router resolves the URL client-side, and the right
+      // page renders. Build-only (dev uses Vite's middleware).
+      name: 'spa-fallback-404',
+      apply: 'build',
+      closeBundle() {
+        const src = 'dist/index.html';
+        const dst = 'dist/404.html';
+        if (existsSync(src)) {
+          copyFileSync(src, dst);
+        }
+      },
+    },
   ],
 
   build: {
