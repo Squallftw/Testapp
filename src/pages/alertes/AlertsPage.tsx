@@ -11,6 +11,7 @@ import {
 } from '@/data/alerts';
 import { toast } from '@/components/ui/Toast';
 import { AlertCard } from '@/components/alerts/AlertCard';
+import { SetupBanner } from '@/components/alerts/SetupBanner';
 
 const SEVERITY_FILTERS: Array<{ value: AlertSeverity | 'all'; label: string }> = [
   { value: 'all',      label: 'Toutes' },
@@ -70,6 +71,8 @@ export default function AlertsPage() {
         </p>
       </div>
 
+      <SetupBanner />
+
       <div className="flex flex-wrap gap-2 items-center">
         {SEVERITY_FILTERS.map((f) => (
           <button
@@ -98,9 +101,15 @@ export default function AlertsPage() {
 
       {active.isLoading && <div className="text-sm text-bati-muted">Chargement…</div>}
 
-      {!active.isLoading && filtered.length === 0 && (
+      {!active.isLoading && active.error && (
         <div className="bati-card rounded-lg p-6 text-sm text-bati-muted text-center">
-          Aucune alerte active — tout va bien.
+          Impossible de charger les alertes. Voir le bandeau ci-dessus pour le diagnostic.
+        </div>
+      )}
+
+      {!active.isLoading && !active.error && filtered.length === 0 && (active.data?.length ?? 0) > 0 && (
+        <div className="bati-card rounded-lg p-6 text-sm text-bati-muted text-center">
+          Aucune alerte pour ce filtre.
         </div>
       )}
 

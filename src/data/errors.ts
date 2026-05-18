@@ -17,6 +17,8 @@ export class PermissionError extends DALError {}
 export class ValidationError extends DALError {}
 export class NetworkError extends DALError {}
 export class ConflictError extends DALError {}
+/** Postgres relation does not exist — typically a migration that hasn't been applied. */
+export class TableMissingError extends DALError {}
 
 interface SupabaseLikeError {
   code?: string;
@@ -49,6 +51,8 @@ export function mapSupabaseError(err: unknown): DALError {
         return new ValidationError(msg, err);
       case '42501':
         return new PermissionError(msg, err);
+      case '42P01':
+        return new TableMissingError(msg, err);
       default:
         return new DALError(msg, err);
     }

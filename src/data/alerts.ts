@@ -1,5 +1,5 @@
 import { getActiveOrgId, getSupabase } from './client';
-import { mapSupabaseError } from './errors';
+import { mapSupabaseError, TableMissingError } from './errors';
 
 export type AlertSeverity = 'info' | 'warning' | 'critical';
 
@@ -107,4 +107,68 @@ export async function undismissAlert(id: string): Promise<void> {
   const supabase = getSupabase();
   const { error } = await supabase.rpc('undismiss_alert', { p_id: id });
   if (error) throw mapSupabaseError(error);
+}
+
+/**
+ * Operational health of the alerts module — used by the setup banner to
+ * distinguish "feature not deployed yet" from "deployed but no alerts" from
+ * "deployed and working". Single probe query, cheap enough to poll.
+ */
+export type AlertsHealth =
+  | { state: 'no_table' }
+  | { state: 'empty' }
+  | { state: 'ok'; activeCount: number; lastSeenAt: string };
+
+export interface EngineSummary {
+  orgs: number;
+  inserted: number;
+  refreshed: number;
+  resolved: number;
+  skipped_cooldown: number;
+  errors: number;
+}
+
+/**
+ * Triggers the `recompute-alerts` Edge Function on demand. Mirrors what the
+ * cron job does every 15 min. Throws `TableMissingError` if migration 0007
+ * hasn't been applied; bubbles up the function's own error shape otherwise.
+ *
+ * The SetupBanner's « Recalculer maintenant » button is the only caller;
+ * production should rely on cron, not this.
+ */
+export async function recomputeAlertsNow(): Promise<EngineSummary> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.functions.invoke<EngineSummary>(
+    'recompute-alerts',
+    { body: {} }
+  );
+  if (error) throw mapSupabaseError(error);
+  if (!data) throw new Error('Edge Function returned no body');
+  return data;
+}
+
+export async function getAlertsHealth(): Promise<AlertsHealth> {
+  const orgId = getActiveOrgId();
+  const supabase = getSupabase();
+  // HEAD + count gets a fast row count without dragging payload back.
+  const { data, error, count } = await supabase
+    .from('alerts')
+    .select('last_seen_at', { count: 'exact' })
+    .eq('org_id', orgId)
+    .is('resolved_at', null)
+    .is('dismissed_at', null)
+    .order('last_seen_at', { ascending: false })
+    .limit(1);
+  if (error) {
+    const mapped = mapSupabaseError(error);
+    if (mapped instanceof TableMissingError) return { state: 'no_table' };
+    throw mapped;
+  }
+  if ((count ?? 0) === 0) return { state: 'empty' };
+  const row = (data ?? [])[0] as { last_seen_at: string } | undefined;
+  return {
+    state: 'ok',
+    activeCount: count ?? 0,
+    lastSeenAt: row?.last_seen_at ?? new Date().toISOString(),
+  };
 }

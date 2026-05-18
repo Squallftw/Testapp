@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import * as Popover from '@radix-ui/react-popover';
 import { useOrg } from '@/contexts/OrgContext';
-import { listActiveAlerts } from '@/data/alerts';
+import { getAlertsHealth, listActiveAlerts } from '@/data/alerts';
 import { AlertCard } from './AlertCard';
 
 export function AlertsBell() {
@@ -17,10 +17,19 @@ export function AlertsBell() {
     refetchInterval: 60_000,
   });
 
+  const health = useQuery({
+    queryKey: ['alerts', 'health', activeOrg?.id],
+    queryFn: getAlertsHealth,
+    enabled: !!activeOrg && canSee,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+
   if (!canSee) return null;
 
   const count = alerts.data?.length ?? 0;
   const top5 = (alerts.data ?? []).slice(0, 5);
+  const setupNeeded = health.data?.state === 'no_table';
 
   return (
     <Popover.Root>
@@ -42,6 +51,12 @@ export function AlertsBell() {
               {count > 99 ? '99+' : count}
             </span>
           )}
+          {count === 0 && setupNeeded && (
+            <span
+              className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-bati-muted"
+              aria-label="Module non configuré"
+            />
+          )}
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -55,7 +70,15 @@ export function AlertsBell() {
             <span className="text-[10px] text-bati-muted">{count} active{count > 1 ? 's' : ''}</span>
           </div>
           {alerts.isLoading && <div className="px-2 py-3 text-xs text-bati-muted">Chargement…</div>}
-          {!alerts.isLoading && top5.length === 0 && (
+          {!alerts.isLoading && setupNeeded && (
+            <div className="px-2 py-3 text-xs text-bati-muted">
+              Module non configuré.{' '}
+              <Link to="/alertes" className="text-bati-teal hover:underline">
+                Voir le diagnostic →
+              </Link>
+            </div>
+          )}
+          {!alerts.isLoading && !setupNeeded && top5.length === 0 && (
             <div className="px-2 py-3 text-xs text-bati-muted">Aucune alerte — tout va bien.</div>
           )}
           <div className="space-y-1">
