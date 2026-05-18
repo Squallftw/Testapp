@@ -23,10 +23,19 @@ export function Toaster() {
   );
 }
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void | Promise<void>;
+}
+
+export interface ToastOptions {
+  action?: ToastAction;
+}
+
 // Thin French-flavoured wrapper. Keeps call sites short and consistent.
 export const toast = {
-  success(message: string) {
-    sonnerToast.success(message);
+  success(message: string, options?: ToastOptions) {
+    sonnerToast.success(message, options);
   },
   error(message: string) {
     sonnerToast.error(message);
