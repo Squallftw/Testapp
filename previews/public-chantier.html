@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Villa Anfa — Suivi · Atlas Bati Sud</title>
+  <meta name="description" content="Suivi en direct du chantier Villa Anfa par Atlas Bati Sud — photos, étapes et avancement." />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..900,0..100,0..1;1,9..144,300..900,0..100,0..1&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  />
+
+  <style>
+    /* ─────────────────────────────────────────────────────────────────────
+       Atelier — design tokens
+       ───────────────────────────────────────────────────────────────────── */
+    :root {
+      --ink:        #1a1612;
+      --ink-soft:   #4a4138;
+      --ink-muted:  #7a6f5f;
+      --paper:      #f6efe1;
+      --paper-warm: #efe6d2;
+      --bone:       #e6dcc6;
+      --terra:      #b85c38;
+      --terra-deep: #8c3f23;
+      --seal:       #1f4f7a;
+      --moss:       #5c6b4a;
+      --rule:       rgba(26, 22, 18, 0.14);
+      --rule-soft:  rgba(26, 22, 18, 0.06);
+
+      --measure: 64rem;
+      --gutter:  clamp(1.25rem, 4vw, 2.5rem);
+
+      --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html { -webkit-text-size-adjust: 100%; }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: 'Manrope', system-ui, sans-serif;
+      font-feature-settings: 'ss01', 'cv11', 'tnum';
+      line-height: 1.55;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Subtle paper grain — fixed, multiply-blended, never on photos */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.55;
+      mix-blend-mode: multiply;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence baseFrequency='0.85' numOctaves='2' seed='3'/><feColorMatrix values='0 0 0 0 0.10  0 0 0 0 0.09  0 0 0 0 0.07  0 0 0 0.10 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+      background-size: 240px 240px;
+    }
+
+    /* Typography classes ─────────────────────────────────────────────── */
+    .display {
+      font-family: 'Fraunces', 'Times New Roman', serif;
+      font-variation-settings: 'opsz' 144, 'SOFT' 50, 'WONK' 0;
+      font-weight: 380;
+      letter-spacing: -0.025em;
+      line-height: 0.92;
+      color: var(--ink);
+    }
+    .display--italic {
+      font-style: italic;
+      font-variation-settings: 'opsz' 144, 'SOFT' 70, 'WONK' 1;
+    }
+    .serif {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: 'opsz' 18, 'SOFT' 30;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-feature-settings: 'tnum', 'ss02';
+      letter-spacing: -0.01em;
+    }
+    .smallcaps {
+      font-family: 'Manrope', sans-serif;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.22em;
+      font-size: 11px;
+      color: var(--ink-muted);
+    }
+
+    /* Layout primitives ──────────────────────────────────────────────── */
+    .page { position: relative; z-index: 2; }
+    .wrap {
+      max-width: var(--measure);
+      margin-inline: auto;
+      padding-inline: var(--gutter);
+    }
+    .rule {
+      border: none;
+      height: 1px;
+      background: var(--rule);
+      margin: 0;
+    }
+    .rule--soft { background: var(--rule-soft); }
+
+    /* ─── 1. Topbar (the contractor's identity, not BatiTrack's) ─── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-block: 1.5rem;
+      gap: 1rem;
+      border-bottom: 1px solid var(--rule);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: var(--ink);
+    }
+    .brand__mark {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      background: var(--ink);
+      color: var(--paper);
+      font-family: 'Fraunces', serif;
+      font-variation-settings: 'opsz' 48;
+      font-weight: 600;
+      font-style: italic;
+      font-size: 19px;
+      letter-spacing: -0.04em;
+      border-radius: 2px;
+    }
+    .brand__name {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: 'opsz' 36;
+      font-weight: 500;
+      font-size: 1.05rem;
+      letter-spacing: -0.01em;
+    }
+    .brand__tag {
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      display: block;
+      margin-top: 1px;
+    }
+    .topbar__meta {
+      text-align: right;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--ink-muted);
+      letter-spacing: 0.04em;
+    }
+    .topbar__meta span { display: block; }
+
+    /* ─── 2. Hero ─── */
+    .hero {
+      position: relative;
+      margin-top: 1.25rem;
+      overflow: hidden;
+      isolation: isolate;
+    }
+    .hero__photo {
+      aspect-ratio: 16 / 11;
+      width: 100%;
+      background:
+        radial-gradient(ellipse at 20% 30%, #d4a87a 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 80%, #6e4a2d 0%, transparent 60%),
+        linear-gradient(155deg, #2e1f15 0%, #6b4a30 38%, #c9a36f 76%, #e7d3ad 100%);
+      position: relative;
+      animation: kenburns 28s ease-in-out infinite alternate;
+    }
+    .hero__photo::after {
+      /* paper-print halftone shimmer */
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(circle at 25% 35%, rgba(255,235,200,0.18) 0%, transparent 12%),
+        radial-gradient(circle at 70% 60%, rgba(0,0,0,0.20) 0%, transparent 18%);
+      mix-blend-mode: overlay;
+    }
+    @keyframes kenburns {
+      0%   { transform: scale(1.00) translate(0, 0); }
+      100% { transform: scale(1.08) translate(-1.5%, -1%); }
+    }
+
+    .hero__plate {
+      position: absolute;
+      left: var(--gutter);
+      right: var(--gutter);
+      bottom: clamp(1.25rem, 4vw, 2.5rem);
+      color: var(--paper);
+      max-width: 38ch;
+    }
+    .hero__type {
+      color: var(--paper);
+      opacity: 0.85;
+      font-weight: 600;
+      letter-spacing: 0.3em;
+      font-size: 10.5px;
+      margin-bottom: 0.5rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .hero__type::before {
+      content: '';
+      width: 1.75rem;
+      height: 1px;
+      background: var(--paper);
+      opacity: 0.55;
+    }
+    .hero__title {
+      font-size: clamp(2.75rem, 9vw, 5.75rem);
+      color: var(--paper);
+      margin: 0;
+      text-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+    }
+    .hero__title em {
+      font-style: italic;
+      font-variation-settings: 'opsz' 144, 'SOFT' 70, 'WONK' 1;
+      color: #f0c8a6;
+    }
+    .hero__sub {
+      margin-top: 0.75rem;
+      color: rgba(246, 239, 225, 0.78);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+    }
+
+    /* ─── 3. Intro paragraph ─── */
+    .intro {
+      padding-block: clamp(2.5rem, 6vw, 4rem) clamp(1.5rem, 4vw, 2rem);
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+    .intro__label {
+      align-self: start;
+    }
+    .intro__body {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: 'opsz' 30, 'SOFT' 30;
+      font-weight: 400;
+      font-size: clamp(1.15rem, 2.2vw, 1.45rem);
+      line-height: 1.45;
+      color: var(--ink);
+      max-width: 50ch;
+    }
+    .intro__body::first-letter {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: 'opsz' 144;
+      font-weight: 500;
+      font-style: italic;
+      float: left;
+      font-size: 3.4em;
+      line-height: 0.85;
+      padding-right: 0.18em;
+      padding-top: 0.05em;
+      color: var(--terra);
+    }
+    @media (min-width: 720px) {
+      .intro { grid-template-columns: 12rem 1fr; gap: 3rem; }
+    }
+
+    /* ─── 4. Stat band ─── */
+    .stats {
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      padding-block: clamp(2rem, 5vw, 3rem);
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2.5rem;
+      align-items: end;
+    }
+    @media (min-width: 720px) {
+      .stats {
+        grid-template-columns: 1.6fr 1fr;
+        gap: clamp(2rem, 6vw, 5rem);
+      }
+    }
+    .stat__num {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: 'opsz' 144, 'SOFT' 30;
+      font-weight: 360;
+      font-size: clamp(5.5rem, 16vw, 9.5rem);
+      line-height: 0.85;
+      letter-spacing: -0.04em;
+      color: var(--ink);
+      display: flex;
+      align-items: baseline;
+      gap: 0.05em;
+    }
+    .stat__pct {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: 'opsz' 36;
+      font-style: italic;
+      font-size: 0.42em;
+      color: var(--ink-muted);
+      transform: translateY(-0.18em);
+    }
+    .stat__bar {
+      margin-top: 1.25rem;
+      height: 3px;
+      background: var(--bone);
+      position: relative;
+      overflow: hidden;
+    }
+    .stat__bar::after {
+      content: '';
+      position: absolute;
+      inset: 0 33% 0 0;
+      background: var(--terra);
+      animation: barfill 1.4s var(--ease-out) 0.4s both;
+      transform-origin: left;
+    }
+    @keyframes barfill {
+      from { transform: scaleX(0); }
+      to   { transform: scaleX(1); }
+    }
+    .stat__bar__rule {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 0.5rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      color: var(--ink-muted);
+      letter-spacing: 0.04em;
+    }
+
+    .stat__date {
+      text-align: left;
+    }
+    @media (min-width: 720px) {
+      .stat__date { text-align: right; }
+    }
+    .stat__date__day {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: 'opsz' 144, 'SOFT' 50;
+      font-weight: 400;
+      font-style: italic;
+      font-size: clamp(3rem, 8vw, 4.75rem);
+      line-height: 1;
+      color: var(--seal);
+      display: block;
+      margin-top: 0.5rem;
+    }
+    .stat__date__year {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--ink-muted);
+      letter-spacing: 0.2em;
+      margin-top: 0.4rem;
+      display: inline-block;
+    }
+    .stat__date__year::before {
+      content: '— ';
+      opacity: 0.5;
+    }
+
+    /* ─── 5. Photos ─── */
+    .photos {
+      padding-block: clamp(3rem, 7vw, 5rem);
+    }
+    .photos__head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 1.75rem;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .photos__title {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: 'opsz' 36;
+      font-weight: 400;
+      font-size: clamp(1.5rem, 3.5vw, 2rem);
+      letter-spacing: -0.015em;
+      margin: 0;
+    }
+    .photos__count {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--ink-muted);
+      letter-spacing: 0.04em;
+    }
+    .photos__count::before {
+      content: '↳ ';
+      color: var(--terra);
+    }
+
+    .masonry {
+      column-count: 2;
+      column-gap: clamp(0.75rem, 2vw, 1.25rem);
+    }
+    @media (min-width: 640px) { .masonry { column-count: 3; } }
+    @media (min-width: 960px) { .masonry { column-count: 4; } }
+
+    .photo {
+      break-inside: avoid;
+      margin-bottom: clamp(0.75rem, 2vw, 1.25rem);
+      display: block;
+      position: relative;
+      background: var(--bone);
+      border: 1px solid var(--rule);
+      box-shadow:
+        0 1px 0 var(--paper),
+        0 8px 18px -12px rgba(26, 22, 18, 0.22);
+      opacity: 0;
+      transform: translateY(8px);
+      animation: rise 0.7s var(--ease-out) forwards;
+    }
+    @keyframes rise {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .photo:nth-child(1)  { animation-delay: 0.05s; }
+    .photo:nth-child(2)  { animation-delay: 0.10s; }
+    .photo:nth-child(3)  { animation-delay: 0.15s; }
+    .photo:nth-child(4)  { animation-delay: 0.20s; }
+    .photo:nth-child(5)  { animation-delay: 0.25s; }
+    .photo:nth-child(6)  { animation-delay: 0.30s; }
+    .photo:nth-child(7)  { animation-delay: 0.35s; }
+    .photo:nth-child(8)  { animation-delay: 0.40s; }
+    .photo:nth-child(9)  { animation-delay: 0.45s; }
+    .photo:nth-child(10) { animation-delay: 0.50s; }
+    .photo:nth-child(11) { animation-delay: 0.55s; }
+    .photo:nth-child(12) { animation-delay: 0.60s; }
+
+    .photo__img {
+      width: 100%;
+      display: block;
+      position: relative;
+    }
+    .photo__img::after {
+      /* subtle inner shadow to read as a real photograph */
+      content: '';
+      position: absolute;
+      inset: 0;
+      box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.12);
+      pointer-events: none;
+    }
+    .photo__num {
+      position: absolute;
+      top: 0.6rem;
+      left: 0.6rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      color: rgba(246, 239, 225, 0.85);
+      mix-blend-mode: difference;
+    }
+    .photo__meta {
+      padding: 0.5rem 0.65rem 0.65rem;
+      border-top: 1px solid var(--rule);
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--ink-muted);
+      letter-spacing: 0.02em;
+      background: var(--paper-warm);
+    }
+    .photo__meta strong {
+      color: var(--ink);
+      font-weight: 500;
+    }
+
+    /* Photo "subjects" — gradient placeholders evoking construction frames */
+    .photo--01 .photo__img { aspect-ratio: 4/5; background: linear-gradient(160deg, #4a3a2a, #b88a5e 70%, #d9b888); }
+    .photo--02 .photo__img { aspect-ratio: 1/1; background: linear-gradient(200deg, #c4b39a, #6e6357 65%, #2c2620); }
+    .photo--03 .photo__img { aspect-ratio: 3/4; background: linear-gradient(135deg, #243747, #4a6b7a 50%, #a8c4cf); }
+    .photo--04 .photo__img { aspect-ratio: 4/3; background: linear-gradient(170deg, #8a4528, #c47a4f 60%, #e0b698); }
+    .photo--05 .photo__img { aspect-ratio: 5/7; background: linear-gradient(180deg, #1f2a23, #4d5e4a 55%, #8da080); }
+    .photo--06 .photo__img { aspect-ratio: 1/1; background: linear-gradient(225deg, #b5a285, #7a6b54 60%, #3d352a); }
+    .photo--07 .photo__img { aspect-ratio: 3/2; background: linear-gradient(145deg, #2d2018, #6b4c33 55%, #cca377); }
+    .photo--08 .photo__img { aspect-ratio: 4/5; background: linear-gradient(195deg, #d3b88f, #9d7a52 70%, #5c4530); }
+    .photo--09 .photo__img { aspect-ratio: 3/4; background: linear-gradient(165deg, #74798a, #3d465a 55%, #1a1f2a); }
+    .photo--10 .photo__img { aspect-ratio: 1/1; background: linear-gradient(140deg, #b85c38, #8a3f24 60%, #4a2412); }
+    .photo--11 .photo__img { aspect-ratio: 4/3; background: linear-gradient(190deg, #e0d2b3, #b8a584 50%, #786a4f); }
+    .photo--12 .photo__img { aspect-ratio: 3/4; background: linear-gradient(125deg, #354152, #5c6d83 55%, #b8c4d2); }
+
+    /* ─── 6. Milestones ─── */
+    .milestones {
+      border-top: 1px solid var(--rule);
+      padding-block: clamp(3rem, 7vw, 5rem);
+    }
+    .milestones__title {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: 'opsz' 36;
+      font-weight: 400;
+      font-size: clamp(1.5rem, 3.5vw, 2rem);
+      letter-spacing: -0.015em;
+      margin: 0 0 2rem;
+    }
+
+    .timeline {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      position: relative;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 11px;
+      top: 0.4rem;
+      bottom: 0.4rem;
+      width: 1px;
+      background: var(--rule);
+    }
+    .step {
+      display: grid;
+      grid-template-columns: 1.75rem 1fr auto;
+      gap: 1.25rem;
+      align-items: baseline;
+      padding-block: 1.1rem;
+      border-bottom: 1px solid var(--rule-soft);
+      position: relative;
+    }
+    .step:last-child { border-bottom: none; }
+
+    .step__mark {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 9px;
+      font-family: 'JetBrains Mono', monospace;
+      background: var(--paper);
+      border: 1px solid var(--rule);
+      position: relative;
+      z-index: 1;
+    }
+    .step--done .step__mark {
+      background: var(--moss);
+      border-color: var(--moss);
+      color: var(--paper);
+    }
+    .step--done .step__mark::before { content: '✓'; font-size: 11px; }
+    .step--active .step__mark {
+      background: var(--terra);
+      border-color: var(--terra);
+      color: var(--paper);
+    }
+    .step--active .step__mark::before { content: '◐'; font-size: 12px; }
+    .step--pending .step__mark::before {
+      content: '';
+      width: 4px; height: 4px;
+      background: var(--ink-muted);
+      border-radius: 50%;
+    }
+
+    .step__label {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: 'opsz' 28;
+      font-weight: 400;
+      font-size: clamp(1.1rem, 2.4vw, 1.4rem);
+      letter-spacing: -0.01em;
+      color: var(--ink);
+    }
+    .step--pending .step__label { color: var(--ink-muted); }
+    .step__sub {
+      display: block;
+      font-family: 'Manrope', sans-serif;
+      font-size: 12.5px;
+      color: var(--ink-muted);
+      font-weight: 400;
+      margin-top: 0.25rem;
+      letter-spacing: 0;
+    }
+    .step__date {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      color: var(--ink-muted);
+      letter-spacing: 0.05em;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .step--active .step__date {
+      color: var(--terra);
+      font-weight: 500;
+    }
+
+    /* ─── 7. Payments ─── */
+    .payments {
+      border-top: 1px solid var(--rule);
+      padding-block: clamp(3rem, 7vw, 5rem);
+      display: grid;
+      gap: 2rem;
+    }
+    @media (min-width: 720px) {
+      .payments { grid-template-columns: 1fr 1.4fr; gap: 4rem; align-items: start; }
+    }
+    .payments__title {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: 'opsz' 36;
+      font-weight: 400;
+      font-size: clamp(1.5rem, 3.5vw, 2rem);
+      letter-spacing: -0.015em;
+      margin: 0 0 0.5rem;
+    }
+    .payments__note {
+      font-size: 13px;
+      color: var(--ink-muted);
+      max-width: 28ch;
+      line-height: 1.5;
+    }
+    .pay__list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .pay__row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: baseline;
+      padding-block: 1.1rem;
+      border-bottom: 1px solid var(--rule-soft);
+      gap: 1rem;
+    }
+    .pay__row:last-child { border-bottom: 1px solid var(--ink); }
+    .pay__label {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: 'opsz' 24;
+      font-size: 1.05rem;
+    }
+    .pay__sub {
+      display: block;
+      font-family: 'Manrope', sans-serif;
+      font-size: 12px;
+      color: var(--ink-muted);
+      margin-top: 0.2rem;
+    }
+    .pay__amount {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: clamp(1rem, 2.3vw, 1.2rem);
+      letter-spacing: -0.02em;
+      font-weight: 500;
+    }
+    .pay__amount__unit {
+      color: var(--ink-muted);
+      font-size: 0.7em;
+      margin-left: 0.25em;
+      letter-spacing: 0.1em;
+    }
+    .pay__row--upcoming .pay__amount { color: var(--terra); }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 0.2rem 0.55rem;
+      background: var(--paper-warm);
+      border: 1px solid var(--rule);
+      color: var(--ink-soft);
+      margin-left: 0.6rem;
+      vertical-align: middle;
+      transform: translateY(-1px);
+    }
+    .pill::before {
+      content: '';
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--terra);
+    }
+
+    /* ─── 8. Contact CTA ─── */
+    .contact {
+      margin-top: clamp(2rem, 5vw, 4rem);
+      background: var(--ink);
+      color: var(--paper);
+      position: relative;
+      overflow: hidden;
+      isolation: isolate;
+    }
+    .contact::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 80% 10%, rgba(184, 92, 56, 0.35), transparent 50%),
+        radial-gradient(circle at 10% 100%, rgba(31, 79, 122, 0.28), transparent 55%);
+      z-index: -1;
+    }
+    .contact__inner {
+      padding-block: clamp(3rem, 7vw, 5rem);
+      display: grid;
+      gap: 2rem;
+      grid-template-columns: 1fr;
+      align-items: end;
+    }
+    @media (min-width: 720px) {
+      .contact__inner { grid-template-columns: 1.4fr auto; }
+    }
+    .contact__title {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: 'opsz' 96, 'SOFT' 40;
+      font-weight: 380;
+      font-size: clamp(2rem, 5.5vw, 3.5rem);
+      line-height: 1;
+      letter-spacing: -0.025em;
+      margin: 0 0 0.75rem;
+      color: var(--paper);
+    }
+    .contact__title em {
+      font-style: italic;
+      color: #f0c8a6;
+      font-variation-settings: 'opsz' 96, 'SOFT' 70, 'WONK' 1;
+    }
+    .contact__sub {
+      font-size: 14.5px;
+      max-width: 32ch;
+      color: rgba(246, 239, 225, 0.75);
+      line-height: 1.55;
+    }
+    .contact__cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.85rem;
+      padding: 1.1rem 1.6rem 1.1rem 1.4rem;
+      background: var(--terra);
+      color: var(--paper);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14.5px;
+      letter-spacing: 0.02em;
+      border: 1px solid var(--terra-deep);
+      transition: transform 0.4s var(--ease-out), background 0.3s;
+      white-space: nowrap;
+    }
+    .contact__cta:hover {
+      background: var(--terra-deep);
+      transform: translateY(-2px);
+    }
+    .contact__cta svg { flex-shrink: 0; }
+    .contact__cta__phone {
+      display: block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+      color: rgba(246, 239, 225, 0.7);
+      letter-spacing: 0.1em;
+      margin-top: 0.4rem;
+    }
+
+    /* ─── 9. Footer (the viral mechanism, tasteful) ─── */
+    .credits {
+      padding-block: 2.5rem;
+      display: grid;
+      gap: 1.5rem;
+      grid-template-columns: 1fr;
+      align-items: center;
+      font-size: 13px;
+      color: var(--ink-muted);
+    }
+    @media (min-width: 640px) {
+      .credits { grid-template-columns: 1fr auto; }
+    }
+    .credits__line {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .credits__line::before {
+      content: '◇';
+      color: var(--terra);
+      font-size: 10px;
+    }
+    .credits a {
+      color: var(--ink);
+      text-decoration: none;
+      border-bottom: 1px solid var(--rule);
+      transition: border-color 0.2s;
+    }
+    .credits a:hover { border-color: var(--terra); color: var(--terra); }
+    .credits__cta {
+      font-family: 'Fraunces', serif;
+      font-variation-settings: 'opsz' 18;
+      font-style: italic;
+      font-weight: 500;
+    }
+
+    /* Reveal-on-load stagger for top sections */
+    .reveal {
+      opacity: 0;
+      transform: translateY(12px);
+      animation: reveal 0.9s var(--ease-out) forwards;
+    }
+    .reveal--1 { animation-delay: 0.10s; }
+    .reveal--2 { animation-delay: 0.25s; }
+    .reveal--3 { animation-delay: 0.40s; }
+    .reveal--4 { animation-delay: 0.55s; }
+    .reveal--5 { animation-delay: 0.70s; }
+    @keyframes reveal {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001s !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001s !important;
+      }
+      .hero__photo { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+
+    <!-- ───────── Topbar (the contractor's brand, not BatiTrack's) ───────── -->
+    <header class="topbar wrap reveal reveal--1">
+      <a class="brand" href="#">
+        <span class="brand__mark">A</span>
+        <span>
+          <span class="brand__name">Atlas Bati Sud</span>
+          <span class="brand__tag">Construction · Casablanca</span>
+        </span>
+      </a>
+      <div class="topbar__meta">
+        <span>chantier no 042</span>
+        <span>mis à jour 17/05</span>
+      </div>
+    </header>
+
+    <!-- ───────── Hero ───────── -->
+    <section class="hero reveal reveal--2" aria-label="Photo de couverture">
+      <div class="hero__photo" role="img" aria-label="Vue du chantier Villa Anfa"></div>
+      <div class="hero__plate">
+        <span class="hero__type">Villa contemporaine · Anfa</span>
+        <h1 class="display hero__title">Villa <em>Anfa</em></h1>
+        <p class="hero__sub">No 042 — lancé le 4 mars 2026</p>
+      </div>
+    </section>
+
+    <!-- ───────── Intro paragraph ───────── -->
+    <section class="intro wrap reveal reveal--3">
+      <span class="smallcaps intro__label">À&nbsp;propos&nbsp;du&nbsp;chantier</span>
+      <p class="intro__body">
+        Villa contemporaine de 320&nbsp;m² avec piscine et patio intérieur,
+        sur un terrain de 600&nbsp;m² à Anfa Supérieur. Livraison clés en main
+        pour la famille Bennani, prévue pour la fin de l’été 2026.
+      </p>
+    </section>
+
+    <!-- ───────── Stat band ───────── -->
+    <section class="stats wrap reveal reveal--4" aria-label="Avancement">
+      <div class="stat">
+        <span class="smallcaps">avancement</span>
+        <div class="stat__num">
+          67<span class="stat__pct">%</span>
+        </div>
+        <div class="stat__bar" aria-hidden="true"></div>
+        <div class="stat__bar__rule">
+          <span>0%</span>
+          <span>100%</span>
+        </div>
+      </div>
+      <div class="stat__date">
+        <span class="smallcaps">livraison prévue</span>
+        <span class="stat__date__day">15 août</span>
+        <span class="stat__date__year mono">2026</span>
+      </div>
+    </section>
+
+    <!-- ───────── Photos ───────── -->
+    <section class="photos wrap reveal reveal--5" aria-label="Galerie de photos">
+      <header class="photos__head">
+        <h2 class="photos__title">Galerie du chantier</h2>
+        <span class="photos__count mono">12 photos · 9 par Hassan, 3 par Mohamed</span>
+      </header>
+
+      <div class="masonry">
+        <figure class="photo photo--01">
+          <div class="photo__img"><span class="photo__num mono">01</span></div>
+          <figcaption class="photo__meta"><span><strong>Coulage dalle RDC</strong></span><span>04/05 · H.</span></figcaption>
+        </figure>
+        <figure class="photo photo--02">
+          <div class="photo__img"><span class="photo__num mono">02</span></div>
+          <figcaption class="photo__meta"><span>Élévation mur sud</span><span>06/05 · H.</span></figcaption>
+        </figure>
+        <figure class="photo photo--03">
+          <div class="photo__img"><span class="photo__num mono">03</span></div>
+          <figcaption class="photo__meta"><span>Vue patio depuis 1er étage</span><span>08/05 · M.</span></figcaption>
+        </figure>
+        <figure class="photo photo--04">
+          <div class="photo__img"><span class="photo__num mono">04</span></div>
+          <figcaption class="photo__meta"><span>Ferraillage poutre</span><span>09/05 · H.</span></figcaption>
+        </figure>
+        <figure class="photo photo--05">
+          <div class="photo__img"><span class="photo__num mono">05</span></div>
+          <figcaption class="photo__meta"><span>Terrain jardin nord</span><span>10/05 · H.</span></figcaption>
+        </figure>
+        <figure class="photo photo--06">
+          <div class="photo__img"><span class="photo__num mono">06</span></div>
+          <figcaption class="photo__meta"><span>Coffrage escalier</span><span>11/05 · H.</span></figcaption>
+        </figure>
+        <figure class="photo photo--07">
+          <div class="photo__img"><span class="photo__num mono">07</span></div>
+          <figcaption class="photo__meta"><span><strong>Pose linteau entrée</strong></span><span>12/05 · M.</span></figcaption>
+        </figure>
+        <figure class="photo photo--08">
+          <div class="photo__img"><span class="photo__num mono">08</span></div>
+          <figcaption class="photo__meta"><span>Maçonnerie 2e étage</span><span>13/05 · H.</span></figcaption>
+        </figure>
+        <figure class="photo photo--09">
+          <div class="photo__img"><span class="photo__num mono">09</span></div>
+          <figcaption class="photo__meta"><span>Charpente toiture</span><span>14/05 · M.</span></figcaption>
+        </figure>
+        <figure class="photo photo--10">
+          <div class="photo__img"><span class="photo__num mono">10</span></div>
+          <figcaption class="photo__meta"><span>Briques de façade</span><span>15/05 · H.</span></figcaption>
+        </figure>
+        <figure class="photo photo--11">
+          <div class="photo__img"><span class="photo__num mono">11</span></div>
+          <figcaption class="photo__meta"><span>Sablage terrasse</span><span>16/05 · H.</span></figcaption>
+        </figure>
+        <figure class="photo photo--12">
+          <div class="photo__img"><span class="photo__num mono">12</span></div>
+          <figcaption class="photo__meta"><span><strong>Vue d’ensemble depuis route</strong></span><span>17/05 · H.</span></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ───────── Milestones ───────── -->
+    <section class="milestones wrap" aria-label="Étapes du chantier">
+      <h2 class="milestones__title">Étapes du chantier</h2>
+      <ol class="timeline">
+        <li class="step step--done">
+          <span class="step__mark" aria-hidden="true"></span>
+          <div>
+            <span class="step__label">Fondations</span>
+            <span class="step__sub">Terrassement, semelles filantes, dallage RDC</span>
+          </div>
+          <span class="step__date">04 mars → 28 mars</span>
+        </li>
+        <li class="step step--done">
+          <span class="step__mark" aria-hidden="true"></span>
+          <div>
+            <span class="step__label">Gros œuvre</span>
+            <span class="step__sub">Élévations, planchers, charpente</span>
+          </div>
+          <span class="step__date">29 mars → 10 mai</span>
+        </li>
+        <li class="step step--active">
+          <span class="step__mark" aria-hidden="true"></span>
+          <div>
+            <span class="step__label display--italic">Second œuvre</span>
+            <span class="step__sub">Cloisons, plomberie, électricité, enduits</span>
+          </div>
+          <span class="step__date">en cours · depuis le 11 mai</span>
+        </li>
+        <li class="step step--pending">
+          <span class="step__mark" aria-hidden="true"></span>
+          <div>
+            <span class="step__label">Finitions</span>
+            <span class="step__sub">Carrelage, peinture, menuiseries, faux-plafond</span>
+          </div>
+          <span class="step__date">à partir du 20 juin</span>
+        </li>
+        <li class="step step--pending">
+          <span class="step__mark" aria-hidden="true"></span>
+          <div>
+            <span class="step__label">Livraison</span>
+            <span class="step__sub">Nettoyage, levée de réserves, remise des clés</span>
+          </div>
+          <span class="step__date">15 août 2026</span>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ───────── Payments (opt-in toggle on in this demo) ───────── -->
+    <section class="payments wrap" aria-label="Paiements">
+      <div>
+        <h2 class="payments__title">Paiements</h2>
+        <p class="payments__note">
+          Échéancier convenu au contrat. Les montants sont indicatifs ;
+          consultez votre <a href="#contact" style="color:var(--terra);text-decoration:underline;">entrepreneur</a> pour toute question.
+        </p>
+      </div>
+      <ul class="pay__list">
+        <li class="pay__row">
+          <div>
+            <span class="pay__label">Acompte de signature</span>
+            <span class="pay__sub">Versé le 04 mars 2026</span>
+          </div>
+          <span class="pay__amount">120 000<span class="pay__amount__unit">dh</span></span>
+        </li>
+        <li class="pay__row">
+          <div>
+            <span class="pay__label">Tranche fondations</span>
+            <span class="pay__sub">Versée le 02 avril 2026</span>
+          </div>
+          <span class="pay__amount">200 000<span class="pay__amount__unit">dh</span></span>
+        </li>
+        <li class="pay__row pay__row--upcoming">
+          <div>
+            <span class="pay__label">Tranche gros œuvre <span class="pill">à échoir</span></span>
+            <span class="pay__sub">Échéance prévue le 30 juin 2026</span>
+          </div>
+          <span class="pay__amount">180 000<span class="pay__amount__unit">dh</span></span>
+        </li>
+        <li class="pay__row">
+          <div>
+            <span class="pay__label">Solde livraison</span>
+            <span class="pay__sub">Prévu au 15 août 2026</span>
+          </div>
+          <span class="pay__amount">100 000<span class="pay__amount__unit">dh</span></span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ───────── Contact ───────── -->
+    <section class="contact" id="contact" aria-label="Contact">
+      <div class="contact__inner wrap">
+        <div>
+          <h2 class="contact__title">Une question, une <em>visite</em>&nbsp;?</h2>
+          <p class="contact__sub">
+            Karim&nbsp;El&nbsp;Amrani — chef de projet pour la Villa Anfa.
+            Réponse sous 24&nbsp;h, du lundi au samedi.
+          </p>
+        </div>
+        <div>
+          <a class="contact__cta" href="https://wa.me/212600000000?text=Bonjour%20Karim%2C%20j%27ai%20une%20question%20concernant%20le%20chantier%20Villa%20Anfa.">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M17.5 14.4l-2.3-.5-1.1 1.1c-1.5-.6-2.7-1.8-3.3-3.3l1.1-1.1-.5-2.3a.7.7 0 00-.7-.5H8.8c-.4 0-.7.3-.7.7 0 5 4 9 9 9 .4 0 .7-.3.7-.7v-1.8a.7.7 0 00-.5-.7zM12 2C6.5 2 2 6.5 2 12c0 1.8.5 3.5 1.3 5L2 22l5.1-1.3c1.4.8 3.1 1.3 4.9 1.3 5.5 0 10-4.5 10-10S17.5 2 12 2z"/>
+            </svg>
+            Écrire sur WhatsApp
+          </a>
+          <span class="contact__cta__phone">+212 6 00 00 00 00</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────── Credits ─────────  -->
+    <hr class="rule" />
+    <footer class="credits wrap">
+      <span class="credits__line">
+        Suivi avec <a href="https://batitrack.ma">BatiTrack</a> · les chantiers, en clair.
+      </span>
+      <a class="credits__cta" href="https://batitrack.ma/signup?utm=public&amp;ref=villa-anfa">
+        Entrepreneur ? Créez vos chantiers en 2&nbsp;min →
+      </a>
+    </footer>
+
+  </div>
+</body>
+</html>

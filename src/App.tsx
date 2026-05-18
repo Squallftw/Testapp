@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { OrgProvider } from '@/contexts/OrgContext';
@@ -31,6 +31,7 @@ import ConsumptionPage from '@/pages/consommables/ConsumptionPage';
 import MovementsPage from '@/pages/consommables/MovementsPage';
 import PlanningPage from '@/pages/planning/PlanningPage';
 import MaterielsListPage from '@/pages/materiels/MaterielsListPage';
+import PublicChantierPage from '@/pages/public/PublicChantierPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,68 +56,86 @@ export default function App() {
         future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
       >
         <AuthProvider>
-          <OrgProvider>
-            <ChantierProvider>
-              <Routes>
-                {/* Auth callback runs regardless of session state — Supabase parses
-                    the URL fragment, then AuthCallbackPage redirects. */}
-                <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          <Routes>
+            {/* Public chantier client view — anonymous, no OrgProvider /
+                ChantierProvider. Reachable by anyone with the shareable URL
+                (`/c/<slug>`); reads go through the `get_public_chantier`
+                anon RPC. See docs/superpowers/specs/2026-05-18-public-chantier-pages-design.md */}
+            <Route path="/c/:slug" element={<PublicChantierPage />} />
 
-                {/* Public routes: redirect to / if already signed in */}
-                <Route element={<PublicRoute />}>
-                  <Route path="/login" element={<LoginPage />} />
-                  <Route path="/signup" element={<SignupPage />} />
-                  <Route path="/reset-password" element={<ResetPasswordPage />} />
-                </Route>
+            {/* All other routes share the org + chantier provider stack. */}
+            <Route element={<AppProvidersOutlet />}>
+              {/* Auth callback runs regardless of session state — Supabase parses
+                  the URL fragment, then AuthCallbackPage redirects. */}
+              <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
-                {/* /auth/update-password is reachable when authenticated
-                    (after a recovery-link click) — no PublicRoute wrapper. */}
-                <Route path="/auth/update-password" element={<UpdatePasswordPage />} />
+              {/* Public routes: redirect to / if already signed in */}
+              <Route element={<PublicRoute />}>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignupPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
+              </Route>
 
-                {/* Protected routes: require session + (usually) an active org */}
-                <Route element={<ProtectedRoute />}>
-                  <Route path="/onboarding/org" element={<CreateOrgPage />} />
+              {/* /auth/update-password is reachable when authenticated
+                  (after a recovery-link click) — no PublicRoute wrapper. */}
+              <Route path="/auth/update-password" element={<UpdatePasswordPage />} />
 
-                  {/* All app routes render inside AppShell (sidebar + topbar). */}
-                  <Route element={<AppShell />}>
-                    <Route path="/" element={<HomePage />} />
+              {/* Protected routes: require session + (usually) an active org */}
+              <Route element={<ProtectedRoute />}>
+                <Route path="/onboarding/org" element={<CreateOrgPage />} />
 
-                    {/* Chantiers — list + detail open to any role (RLS narrows for site_managers). */}
-                    <Route path="/chantiers" element={<ChantiersListPage />} />
-                    <Route path="/chantiers/:id" element={<ChantierDetailPage />} />
+                {/* All app routes render inside AppShell (sidebar + topbar). */}
+                <Route element={<AppShell />}>
+                  <Route path="/" element={<HomePage />} />
 
-                    <Route path="/pointage" element={<PointagePage />} />
-                    <Route path="/planning" element={<PlanningPage />} />
-                    <Route path="/consommables" element={<ConsommablesLayout />}>
-                      <Route index element={<Navigate to="articles" replace />} />
-                      <Route path="articles" element={<ArticlesPage />} />
-                      <Route path="achats" element={<PurchasesPage />} />
-                      <Route path="consommation" element={<ConsumptionPage />} />
-                      <Route path="fournisseurs" element={<SuppliersPage />} />
-                      <Route path="mouvements" element={<MovementsPage />} />
-                    </Route>
-                    <Route path="/materiels" element={<MaterielsListPage />} />
+                  {/* Chantiers — list + detail open to any role (RLS narrows for site_managers). */}
+                  <Route path="/chantiers" element={<ChantiersListPage />} />
+                  <Route path="/chantiers/:id" element={<ChantierDetailPage />} />
 
-                    {/* Owner/admin-only routes */}
-                    <Route element={<RequireRole roles={['owner', 'admin']} />}>
-                      <Route path="/chantiers/new" element={<ChantierEditPage />} />
-                      <Route path="/chantiers/:id/edit" element={<ChantierEditPage />} />
-                      <Route path="/ouvriers" element={<WorkersListPage />} />
-                      <Route path="/ouvriers/new" element={<WorkerEditPage />} />
-                      <Route path="/ouvriers/:id/edit" element={<WorkerEditPage />} />
-                      <Route path="/settings/org" element={<OrgSettingsPage />} />
-                      <Route path="/settings/members" element={<MembersPage />} />
-                    </Route>
+                  <Route path="/pointage" element={<PointagePage />} />
+                  <Route path="/planning" element={<PlanningPage />} />
+                  <Route path="/consommables" element={<ConsommablesLayout />}>
+                    <Route index element={<Navigate to="articles" replace />} />
+                    <Route path="articles" element={<ArticlesPage />} />
+                    <Route path="achats" element={<PurchasesPage />} />
+                    <Route path="consommation" element={<ConsumptionPage />} />
+                    <Route path="fournisseurs" element={<SuppliersPage />} />
+                    <Route path="mouvements" element={<MovementsPage />} />
+                  </Route>
+                  <Route path="/materiels" element={<MaterielsListPage />} />
+
+                  {/* Owner/admin-only routes */}
+                  <Route element={<RequireRole roles={['owner', 'admin']} />}>
+                    <Route path="/chantiers/new" element={<ChantierEditPage />} />
+                    <Route path="/chantiers/:id/edit" element={<ChantierEditPage />} />
+                    <Route path="/ouvriers" element={<WorkersListPage />} />
+                    <Route path="/ouvriers/new" element={<WorkerEditPage />} />
+                    <Route path="/ouvriers/:id/edit" element={<WorkerEditPage />} />
+                    <Route path="/settings/org" element={<OrgSettingsPage />} />
+                    <Route path="/settings/members" element={<MembersPage />} />
                   </Route>
                 </Route>
+              </Route>
+            </Route>
 
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-              <Toaster />
-            </ChantierProvider>
-          </OrgProvider>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+          <Toaster />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>
+  );
+}
+
+// Layout outlet that provides the OrgProvider + ChantierProvider stack to
+// every app route that needs an active org. Kept private to App.tsx — the
+// /c/:slug public route deliberately sits outside this wrapper.
+function AppProvidersOutlet() {
+  return (
+    <OrgProvider>
+      <ChantierProvider>
+        <Outlet />
+      </ChantierProvider>
+    </OrgProvider>
   );
 }
