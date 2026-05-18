@@ -37,3 +37,7 @@ vite.config.d.ts
 
 # Claude Code session metadata (local-only)
 .claude/
+
+# Supabase CLI workspace (caches, runtime artefacts)
+supabase/.temp/
+supabase/.branches/

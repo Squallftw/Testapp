@@ -4,7 +4,7 @@ import { CHANTIER_STATUS_LABEL } from '@/data/chantiers';
 const STATUS_CLASS: Record<ChantierStatus, string> = {
   active: 'bg-bati-teal-soft text-bati-teal',
   paused: 'bg-bati-border-soft text-bati-muted',
-  completed: 'bg-[#D8EBDD] text-bati-success',
+  completed: 'bg-bati-success-soft text-bati-success',
   cancelled: 'bg-bati-terra-soft text-bati-terra',
 };
 

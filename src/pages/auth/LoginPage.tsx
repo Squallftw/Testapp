@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { AuthLayout } from '@/components/auth/AuthLayout';
+import { Button } from '@/components/ui/Button';
 
 interface LocationState {
   from?: { pathname: string };
@@ -32,10 +34,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bati-bg p-6">
-      <div className="bati-card rounded-lg p-8 w-full max-w-md shadow-sm">
-        <h1 className="text-2xl font-bold text-bati-teal mb-1">BatiTrack</h1>
-        <p className="text-sm text-bati-muted mb-6">Connexion à votre compte.</p>
+    <AuthLayout>
+      <div className="bati-card bati-elev-1 rounded-xl p-8">
+        <h1 className="text-2xl font-bold text-bati-text mb-1">Connexion</h1>
+        <p className="text-sm text-bati-muted mb-6">Accédez à votre espace BatiTrack.</p>
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div>
             <label className="block text-xs font-medium text-bati-muted mb-1" htmlFor="email">
@@ -77,13 +79,9 @@ export default function LoginPage() {
               {error}
             </p>
           )}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full bg-bati-teal text-white py-2 rounded text-sm font-medium hover:opacity-90 disabled:opacity-50 transition"
-          >
+          <Button type="submit" loading={submitting} className="w-full">
             {submitting ? 'Connexion…' : 'Se connecter'}
-          </button>
+          </Button>
         </form>
         <div className="mt-6 flex justify-between text-xs">
           <Link to="/signup" className="text-bati-teal hover:underline">
@@ -94,6 +92,6 @@ export default function LoginPage() {
           </Link>
         </div>
       </div>
-    </div>
+    </AuthLayout>
   );
 }

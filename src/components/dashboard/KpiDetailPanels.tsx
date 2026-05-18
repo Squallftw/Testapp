@@ -17,7 +17,7 @@ interface PanelWrapperProps {
 
 export function KpiDetailPanel({ title, onClose, children }: PanelWrapperProps) {
   return (
-    <div className="bati-card rounded-lg p-5 border-bati-teal/30">
+    <div className="bati-card bati-elev-1 rounded-xl p-5 border-bati-teal/30">
       <div className="flex items-baseline justify-between mb-3">
         <h3 className="text-sm font-bold text-bati-text">{title}</h3>
         <button

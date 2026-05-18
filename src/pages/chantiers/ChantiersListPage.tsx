@@ -12,6 +12,7 @@ import { useOrg } from '@/contexts/OrgContext';
 import { DataTable } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatusBadge } from '@/components/ui/StatusBadge';
+import { Button } from '@/components/ui/Button';
 import { formatMAD, formatDateShort } from '@/lib/format';
 
 const STATUS_FILTERS: Array<{ value: 'all' | ChantierStatus; label: string }> = [
@@ -107,13 +108,7 @@ export default function ChantiersListPage() {
             : 'Impossible de charger les chantiers.'
         }
         action={
-          <button
-            type="button"
-            onClick={() => query.refetch()}
-            className="px-4 py-2 bg-bati-teal text-white rounded-md text-sm hover:opacity-90"
-          >
-            Réessayer
-          </button>
+          <Button onClick={() => query.refetch()}>Réessayer</Button>
         }
       />
     );
@@ -131,7 +126,7 @@ export default function ChantiersListPage() {
         {canCreate && (
           <Link
             to="/chantiers/new"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-bati-teal text-white rounded-md text-sm font-medium hover:opacity-90 transition-opacity"
+            className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md text-sm font-medium bg-bati-teal text-white hover:bg-bati-teal-deep active:translate-y-[1px] shadow-sm hover:shadow transition-[background-color,opacity,transform,box-shadow] duration-150"
           >
             <svg
               width="16"

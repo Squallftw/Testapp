@@ -44,7 +44,7 @@ export function ChantierScoreCard({
   return (
     <Link
       to={`/chantiers/${chantier.id}`}
-      className="block bati-card rounded-lg p-5 hover:shadow-md transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-bati-teal"
+      className="block bati-card bati-elev-hover rounded-xl p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-bati-teal"
     >
       <div className="flex items-start gap-3">
         <div

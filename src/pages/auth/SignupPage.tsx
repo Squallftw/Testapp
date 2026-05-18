@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { AuthLayout } from '@/components/auth/AuthLayout';
+import { Button } from '@/components/ui/Button';
 
 export default function SignupPage() {
   const { signUp } = useAuth();
@@ -31,8 +33,8 @@ export default function SignupPage() {
 
   if (confirmationSent) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bati-bg p-6">
-        <div className="bati-card rounded-lg p-8 w-full max-w-md shadow-sm text-center">
+      <AuthLayout>
+        <div className="bati-card bati-elev-1 rounded-xl p-8 text-center">
           <h1 className="text-xl font-bold text-bati-teal mb-3">Vérifiez votre email</h1>
           <p className="text-sm text-bati-muted">
             Nous avons envoyé un lien de confirmation à <strong>{email}</strong>. Cliquez
@@ -42,15 +44,17 @@ export default function SignupPage() {
             Retour à la connexion
           </Link>
         </div>
-      </div>
+      </AuthLayout>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bati-bg p-6">
-      <div className="bati-card rounded-lg p-8 w-full max-w-md shadow-sm">
-        <h1 className="text-2xl font-bold text-bati-teal mb-1">BatiTrack</h1>
-        <p className="text-sm text-bati-muted mb-6">Créez votre compte.</p>
+    <AuthLayout>
+      <div className="bati-card bati-elev-1 rounded-xl p-8">
+        <h1 className="text-2xl font-bold text-bati-text mb-1">Créer un compte</h1>
+        <p className="text-sm text-bati-muted mb-6">
+          Commencez à suivre vos chantiers en quelques minutes.
+        </p>
         <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div>
             <label className="block text-xs font-medium text-bati-muted mb-1" htmlFor="email">
@@ -96,13 +100,9 @@ export default function SignupPage() {
               {error}
             </p>
           )}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full bg-bati-teal text-white py-2 rounded text-sm font-medium hover:opacity-90 disabled:opacity-50 transition"
-          >
+          <Button type="submit" loading={submitting} className="w-full">
             {submitting ? 'Création…' : 'Créer le compte'}
-          </button>
+          </Button>
         </form>
         <div className="mt-6 text-xs text-center">
           <Link to="/login" className="text-bati-teal hover:underline">
@@ -110,6 +110,6 @@ export default function SignupPage() {
           </Link>
         </div>
       </div>
-    </div>
+    </AuthLayout>
   );
 }

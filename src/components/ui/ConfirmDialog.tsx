@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Modal } from './Modal';
+import { Button } from './Button';
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -46,26 +47,20 @@ export function ConfirmDialog({
     <Modal open={open} onOpenChange={onOpenChange} title={title} size="md">
       <div className="text-sm text-bati-text leading-relaxed">{description}</div>
       <div className="mt-6 flex justify-end gap-2">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
           onClick={() => onOpenChange(false)}
           disabled={pending}
-          className="px-4 py-2 text-sm font-medium text-bati-text hover:bg-bati-border-soft rounded-md transition-colors disabled:opacity-50"
         >
           {cancelLabel}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant={destructive ? 'destructive' : 'primary'}
           onClick={handleConfirm}
-          disabled={pending}
-          className={
-            destructive
-              ? 'px-4 py-2 text-sm font-medium text-white bg-bati-terra hover:opacity-90 rounded-md transition-opacity disabled:opacity-50'
-              : 'px-4 py-2 text-sm font-medium text-white bg-bati-teal hover:opacity-90 rounded-md transition-opacity disabled:opacity-50'
-          }
+          loading={pending}
         >
-          {pending ? '...' : confirmLabel}
-        </button>
+          {confirmLabel}
+        </Button>
       </div>
     </Modal>
   );

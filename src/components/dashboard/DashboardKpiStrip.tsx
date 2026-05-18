@@ -101,7 +101,7 @@ function Kpi({
       onClick={onClick}
       aria-pressed={active}
       aria-controls={`kpi-panel-${kpiKey}`}
-      className={`bati-card rounded-lg p-4 text-left transition-all hover:bg-bati-border-soft/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-bati-teal ${
+      className={`bati-card bati-elev-hover rounded-xl p-4 text-left hover:bg-bati-border-soft/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-bati-teal ${
         active ? 'ring-2 ring-bati-teal shadow-sm' : ''
       }`}
     >

@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { AuthLayout } from '@/components/auth/AuthLayout';
+import { Button } from '@/components/ui/Button';
 
 export default function UpdatePasswordPage() {
   const { updatePassword } = useAuth();
@@ -38,21 +40,21 @@ export default function UpdatePasswordPage() {
 
   if (done) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-bati-bg p-6">
-        <div className="bati-card rounded-lg p-8 w-full max-w-md shadow-sm text-center">
+      <AuthLayout>
+        <div className="bati-card bati-elev-1 rounded-xl p-8 text-center">
           <h1 className="text-xl font-bold text-bati-success mb-3">
             Mot de passe mis à jour
           </h1>
           <p className="text-sm text-bati-muted">Redirection en cours…</p>
         </div>
-      </div>
+      </AuthLayout>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bati-bg p-6">
-      <div className="bati-card rounded-lg p-8 w-full max-w-md shadow-sm">
-        <h1 className="text-2xl font-bold text-bati-teal mb-1">
+    <AuthLayout>
+      <div className="bati-card bati-elev-1 rounded-xl p-8">
+        <h1 className="text-2xl font-bold text-bati-text mb-1">
           Nouveau mot de passe
         </h1>
         <p className="text-sm text-bati-muted mb-6">
@@ -102,13 +104,9 @@ export default function UpdatePasswordPage() {
               {error}
             </p>
           )}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full bg-bati-teal text-white py-2 rounded text-sm font-medium hover:opacity-90 disabled:opacity-50 transition"
-          >
+          <Button type="submit" loading={submitting} className="w-full">
             {submitting ? 'Mise à jour…' : 'Mettre à jour'}
-          </button>
+          </Button>
         </form>
         <div className="mt-6 text-xs text-center">
           <Link to="/" className="text-bati-teal hover:underline">
@@ -116,6 +114,6 @@ export default function UpdatePasswordPage() {
           </Link>
         </div>
       </div>
-    </div>
+    </AuthLayout>
   );
 }

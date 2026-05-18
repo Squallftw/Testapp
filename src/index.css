@@ -10,11 +10,13 @@
   --bati-text: #1F2421;
   --bati-muted: #6B6359;
   --bati-teal: #0E5460;
+  --bati-teal-deep: #073841;
   --bati-teal-soft: #D8E5E7;
   --bati-terra: #C25B3F;
   --bati-terra-soft: #F2DCD3;
   --bati-ochre: #C58122;
   --bati-success: #2E9152;
+  --bati-success-soft: #D8EBDD;
 }
 
 html,
@@ -40,14 +42,61 @@ body {
     border-color: var(--bati-border);
   }
 
+  /* Sidebar — active item gets a teal left stripe + soft tint instead of
+     a flat solid block. Inactive items shift slightly on hover for tactility. */
   .bati-nav-active {
+    background: rgba(14, 84, 96, 0.08);
+    color: var(--bati-teal);
+    font-weight: 600;
+    position: relative;
+  }
+  .bati-nav-active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
     background: var(--bati-teal);
-    color: #fff;
+  }
+  [dir='rtl'] .bati-nav-active::before {
+    left: auto;
+    right: 0;
+    border-radius: 2px 0 0 2px;
   }
 
   .bati-card {
     background: var(--bati-card);
     border: 1px solid var(--bati-border);
+  }
+
+  /* Two-step elevation scale used to lift hero cards above the warm cream
+     background. Tinted toward bati-text so shadows feel warm, not grey. */
+  .bati-elev-1 {
+    box-shadow:
+      0 1px 2px rgba(15, 35, 30, 0.04),
+      0 1px 3px rgba(15, 35, 30, 0.06);
+  }
+  .bati-elev-2 {
+    box-shadow:
+      0 4px 6px rgba(15, 35, 30, 0.05),
+      0 8px 16px rgba(15, 35, 30, 0.06);
+  }
+  /* Interactive cards: subtle base elevation that lifts on hover. Smooth
+     transition between the two levels. Pair with `transition-transform`
+     utilities for additional motion. */
+  .bati-elev-hover {
+    box-shadow:
+      0 1px 2px rgba(15, 35, 30, 0.04),
+      0 1px 3px rgba(15, 35, 30, 0.06);
+    transition: box-shadow 150ms ease, transform 150ms ease;
+  }
+  .bati-elev-hover:hover {
+    box-shadow:
+      0 4px 6px rgba(15, 35, 30, 0.05),
+      0 8px 16px rgba(15, 35, 30, 0.06);
+    transform: translateY(-1px);
   }
 
   .bati-input {

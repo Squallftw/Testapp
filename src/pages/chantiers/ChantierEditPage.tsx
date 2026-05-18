@@ -15,6 +15,7 @@ import {
 } from '@/data/chantiers';
 import { useOrg } from '@/contexts/OrgContext';
 import { toast } from '@/components/ui/Toast';
+import { Button } from '@/components/ui/Button';
 
 const STATUS: ChantierStatus[] = ['active', 'paused', 'completed', 'cancelled'];
 
@@ -408,17 +409,13 @@ export default function ChantierEditPage() {
         <div className="flex justify-end gap-2 pt-2">
           <Link
             to={isNew ? '/chantiers' : `/chantiers/${id}`}
-            className="px-4 py-2 text-sm font-medium text-bati-text hover:bg-bati-border-soft rounded-md"
+            className="inline-flex items-center h-9 px-4 text-sm font-medium text-bati-text hover:bg-bati-border-soft rounded-md transition-colors"
           >
             Annuler
           </Link>
-          <button
-            type="submit"
-            disabled={pending}
-            className="px-5 py-2 bg-bati-teal text-white rounded-md text-sm font-medium hover:opacity-90 disabled:opacity-50"
-          >
+          <Button type="submit" loading={pending}>
             {pending ? 'Enregistrement…' : isNew ? 'Créer le chantier' : 'Enregistrer'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>
