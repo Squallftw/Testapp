@@ -24,6 +24,16 @@ body {
   font-family: 'Manrope', system-ui, sans-serif;
   color: var(--bati-text);
   background: var(--bati-bg);
+  /* Manrope stylistic alternates: cv11 swaps the single-storey "a" for the
+     more readable double-storey form; ss01 cleans up the period/comma;
+     tnum forces tabular numerals app-wide so list rows align without us
+     having to remember to opt in per place. text-rendering hint keeps
+     hinting on macOS but skips kerning on huge body runs (faster). */
+  font-feature-settings: 'cv11', 'ss01', 'tnum';
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.55;
 }
 
 [dir='rtl'] body {
@@ -101,17 +111,52 @@ body {
 
   .bati-input {
     width: 100%;
+    height: 36px; /* matches Button md (h-9) so they line up in toolbars */
     background: white;
     border: 1px solid var(--bati-border);
-    border-radius: 8px;
-    padding: 8px 12px;
+    border-radius: 6px;
+    padding: 0 12px;
     font-size: 13px;
+    line-height: 1.4;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
   }
-
+  .bati-input:hover:not(:focus):not(:disabled) {
+    border-color: #d8d0c2;
+  }
   .bati-input:focus {
     outline: none;
     border-color: var(--bati-teal);
-    box-shadow: 0 0 0 3px rgba(14, 84, 96, 0.1);
+    box-shadow: 0 0 0 3px rgba(14, 84, 96, 0.18);
+  }
+  .bati-input:disabled {
+    background: #fafaf7;
+    color: var(--bati-muted);
+    cursor: not-allowed;
+  }
+  /* Inline textareas using bati-input need an auto height — opt out of the
+     fixed 36px above. Keep the same chrome (radius, padding, focus). */
+  textarea.bati-input {
+    height: auto;
+    padding: 10px 12px;
+    line-height: 1.55;
+  }
+
+  /* Tabular numerics for any column that holds numbers — keeps right-aligned
+     money columns visually clean across rows. Apply on the cell or the
+     wrapping span; cheap, additive. */
+  .bati-num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* Mono-tabular for places where the character grid matters: timestamps,
+     IDs, deltas, ICE/RC fields. Uses JetBrains Mono (loaded via Google
+     Fonts) with tabular figures. */
+  .bati-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-feature-settings: 'tnum';
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
   }
 
   .bati-grid {
@@ -122,6 +167,16 @@ body {
   .bati-grid td,
   .bati-grid th {
     background: #fff;
+  }
+
+  /* Numeric column variant — right-aligned tabular figures. Apply on the
+     <td>/<th> via column meta. Pairs with `.bati-num` if you want to use
+     the regular sans-serif, or override locally with `.bati-mono`. */
+  .bati-grid td.is-numeric,
+  .bati-grid th.is-numeric {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
   }
 
   .bati-grid .bati-sticky-l {
@@ -218,4 +273,28 @@ select {
 
 main > div > * {
   animation: batiFade 0.25s ease-out;
+}
+
+/* Subtle horizontal sweep used by Skeleton variant="shimmer". Reads as
+   "something is loading" without the throbbing of a pulse — preferred on
+   table-row placeholders where 5+ pulses at once feel busy. */
+@keyframes batiShimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.bati-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--bati-border-soft) 0%,
+    #f6f2e9 50%,
+    var(--bati-border-soft) 100%
+  );
+  background-size: 200% 100%;
+  animation: batiShimmer 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  main > div > * { animation: none; }
+  .bati-shimmer { animation: none; background: var(--bati-border-soft); }
 }

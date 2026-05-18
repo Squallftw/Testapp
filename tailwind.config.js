@@ -6,6 +6,10 @@ export default {
       fontFamily: {
         sans: ['Manrope', 'system-ui', 'sans-serif'],
         arabic: ['"Noto Naskh Arabic"', 'Manrope', 'system-ui', 'sans-serif'],
+        // Mono for tabular numerics (money columns, timestamps, IDs).
+        // Loaded via the same Google Fonts link as Manrope; ui-monospace
+        // is the macOS fallback that already groups with tabular figures.
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
       colors: {
         // Mapped to CSS vars in src/index.css so themes can be swapped at runtime.
