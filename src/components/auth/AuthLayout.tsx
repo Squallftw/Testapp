@@ -12,7 +12,7 @@ interface AuthLayoutProps {
  */
 export function AuthLayout({ children }: AuthLayoutProps) {
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-bati-bg">
+    <div className="min-h-screen flex flex-col md:flex-row bati-canvas">
       {/* Mobile top banner — short branded gradient with the wordmark only */}
       <div
         className="md:hidden h-28 relative overflow-hidden flex items-center px-6"

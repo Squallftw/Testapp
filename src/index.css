@@ -3,37 +3,76 @@
 @tailwind utilities;
 
 :root {
-  --bati-bg: #FAF7F1;
+  /* Cool modern-SaaS canvas + neutrals */
+  --bati-bg: #F5F7FB;
   --bati-card: #FFFFFF;
-  --bati-border: #E8E2D8;
-  --bati-border-soft: #F0EAE0;
-  --bati-text: #1F2421;
-  --bati-muted: #6B6359;
-  --bati-teal: #0E5460;
-  --bati-teal-deep: #073841;
-  --bati-teal-soft: #D8E5E7;
-  --bati-terra: #C25B3F;
-  --bati-terra-soft: #F2DCD3;
+  --bati-border: #E6E9F0;
+  --bati-border-soft: #F0F2F7;
+  --bati-text: #101828;
+  --bati-muted: #667085;
+
+  /* Primary = royal blue. The legacy --bati-teal* names alias to primary, so
+     the ~140 existing `bati-teal` usages reskin to blue with zero churn.
+     Genuine teal heritage lives in --bati-accent*. */
+  --bati-primary: #3B6FF5;
+  --bati-primary-deep: #2A56D8;
+  --bati-primary-soft: #E8EFFF;
+  --bati-teal: var(--bati-primary);
+  --bati-teal-deep: var(--bati-primary-deep);
+  --bati-teal-soft: var(--bati-primary-soft);
+
+  /* Teal heritage — secondary accent (chart series, subtle brand touches) */
+  --bati-accent: #0E5460;
+  --bati-accent-soft: #D8E5E7;
+
+  /* Semantic states */
+  --bati-success: #17B26A;
+  --bati-success-soft: #E6F8F0;
+  --bati-warning: #F59E0B;
+  --bati-warning-soft: #FEF3C7;
+  --bati-terra: #D9503A;
+  --bati-terra-soft: #FBE7E0;
   --bati-ochre: #C58122;
-  --bati-success: #2E9152;
-  --bati-success-soft: #D8EBDD;
+
+  /* Structure */
+  --bati-radius-card: 16px;
+  --bati-radius-ctl: 10px;
+  --bati-shadow-1: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.05);
+  --bati-shadow-2: 0 4px 10px rgba(16, 24, 40, 0.05), 0 14px 30px rgba(16, 24, 40, 0.08);
+
+  /* Zellij canvas veil strength. --bati-zellij is set in main.tsx to the
+     bundled asset URL (base-correct); higher veil alpha = fainter pattern. */
+  --bati-canvas-veil: rgba(245, 247, 251, 0.865);
 }
 
 html,
 body {
-  font-family: 'Manrope', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, sans-serif;
   color: var(--bati-text);
   background: var(--bati-bg);
-  /* Manrope stylistic alternates: cv11 swaps the single-storey "a" for the
-     more readable double-storey form; ss01 cleans up the period/comma;
-     tnum forces tabular numerals app-wide so list rows align without us
-     having to remember to opt in per place. text-rendering hint keeps
-     hinting on macOS but skips kerning on huge body runs (faster). */
-  font-feature-settings: 'cv11', 'ss01', 'tnum';
+  /* Inter stylistic sets: cv05 (lowercase l with tail), cv11 (single-storey a),
+     ss01 cleans punctuation; tnum forces tabular numerals app-wide so list
+     rows align without us having to opt in per place. */
+  font-feature-settings: 'cv05', 'cv11', 'ss01', 'tnum';
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  line-height: 1.55;
+  line-height: 1.5;
+}
+
+/* Faint Moroccan zellij texture on the app canvas. background-blend `multiply`
+   drops the tile's white so only the contour lines show; a translucent veil
+   layer fades it to a whisper. Cards/sidebar/topbar are opaque, so the pattern
+   reads only in the gutters and margins — never behind text. */
+body {
+  background-color: var(--bati-bg);
+  background-image:
+    linear-gradient(var(--bati-canvas-veil), var(--bati-canvas-veil)),
+    var(--bati-zellij, none);
+  background-blend-mode: normal, multiply;
+  background-size: auto, 320px 320px;
+  background-repeat: repeat;
+  background-attachment: fixed;
 }
 
 [dir='rtl'] body {
@@ -42,70 +81,57 @@ body {
 
 @layer components {
   .bati-topbar {
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(8px);
+    background: var(--bati-card);
     border-color: var(--bati-border);
   }
 
   .bati-sidebar {
-    background: #f5efe3;
+    background: var(--bati-card);
     border-color: var(--bati-border);
   }
 
-  /* Sidebar — active item gets a teal left stripe + soft tint instead of
-     a flat solid block. Inactive items shift slightly on hover for tactility. */
+  /* Sidebar — active item is a filled soft-blue rounded pill (icon + label
+     turn primary). Inactive items shift on hover for tactility. */
   .bati-nav-active {
-    background: rgba(14, 84, 96, 0.08);
-    color: var(--bati-teal);
+    background: var(--bati-primary-soft);
+    color: var(--bati-primary-deep);
     font-weight: 600;
-    position: relative;
-  }
-  .bati-nav-active::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 6px;
-    bottom: 6px;
-    width: 3px;
-    border-radius: 0 2px 2px 0;
-    background: var(--bati-teal);
-  }
-  [dir='rtl'] .bati-nav-active::before {
-    left: auto;
-    right: 0;
-    border-radius: 2px 0 0 2px;
   }
 
   .bati-card {
     background: var(--bati-card);
-    border: 1px solid var(--bati-border);
+    border: 1px solid var(--bati-border-soft);
+    border-radius: var(--bati-radius-card);
   }
 
-  /* Two-step elevation scale used to lift hero cards above the warm cream
-     background. Tinted toward bati-text so shadows feel warm, not grey. */
+  /* Reusable app canvas — the faint zellij texture from the body, factored out
+     so non-body surfaces (e.g. the auth screen) can carry the same backdrop.
+     Mirrors the body recipe above. */
+  .bati-canvas {
+    background-color: var(--bati-bg);
+    background-image:
+      linear-gradient(var(--bati-canvas-veil), var(--bati-canvas-veil)),
+      var(--bati-zellij, none);
+    background-blend-mode: normal, multiply;
+    background-size: auto, 320px 320px;
+    background-repeat: repeat;
+  }
+
+  /* Two-step elevation scale lifts cards above the cool canvas. Cool, diffused
+     shadows (tinted toward slate) for the soft modern-SaaS feel. */
   .bati-elev-1 {
-    box-shadow:
-      0 1px 2px rgba(15, 35, 30, 0.04),
-      0 1px 3px rgba(15, 35, 30, 0.06);
+    box-shadow: var(--bati-shadow-1);
   }
   .bati-elev-2 {
-    box-shadow:
-      0 4px 6px rgba(15, 35, 30, 0.05),
-      0 8px 16px rgba(15, 35, 30, 0.06);
+    box-shadow: var(--bati-shadow-2);
   }
-  /* Interactive cards: subtle base elevation that lifts on hover. Smooth
-     transition between the two levels. Pair with `transition-transform`
-     utilities for additional motion. */
+  /* Interactive cards: subtle base elevation that lifts on hover. */
   .bati-elev-hover {
-    box-shadow:
-      0 1px 2px rgba(15, 35, 30, 0.04),
-      0 1px 3px rgba(15, 35, 30, 0.06);
+    box-shadow: var(--bati-shadow-1);
     transition: box-shadow 150ms ease, transform 150ms ease;
   }
   .bati-elev-hover:hover {
-    box-shadow:
-      0 4px 6px rgba(15, 35, 30, 0.05),
-      0 8px 16px rgba(15, 35, 30, 0.06);
+    box-shadow: var(--bati-shadow-2);
     transform: translateY(-1px);
   }
 
@@ -114,22 +140,22 @@ body {
     height: 36px; /* matches Button md (h-9) so they line up in toolbars */
     background: white;
     border: 1px solid var(--bati-border);
-    border-radius: 6px;
+    border-radius: var(--bati-radius-ctl);
     padding: 0 12px;
     font-size: 13px;
     line-height: 1.4;
     transition: border-color 120ms ease, box-shadow 120ms ease;
   }
   .bati-input:hover:not(:focus):not(:disabled) {
-    border-color: #d8d0c2;
+    border-color: #cdd5e2;
   }
   .bati-input:focus {
     outline: none;
-    border-color: var(--bati-teal);
-    box-shadow: 0 0 0 3px rgba(14, 84, 96, 0.18);
+    border-color: var(--bati-primary);
+    box-shadow: 0 0 0 3px rgba(59, 111, 245, 0.18);
   }
   .bati-input:disabled {
-    background: #fafaf7;
+    background: #f6f8fb;
     color: var(--bati-muted);
     cursor: not-allowed;
   }
@@ -208,8 +234,8 @@ body {
 
   .bati-motif {
     background-image:
-      repeating-linear-gradient(45deg, rgba(14, 84, 96, 0.03) 0 2px, transparent 2px 14px),
-      repeating-linear-gradient(-45deg, rgba(14, 84, 96, 0.03) 0 2px, transparent 2px 14px);
+      repeating-linear-gradient(45deg, rgba(59, 111, 245, 0.03) 0 2px, transparent 2px 14px),
+      repeating-linear-gradient(-45deg, rgba(59, 111, 245, 0.03) 0 2px, transparent 2px 14px);
   }
 
   [dir='rtl'] .bati-grid .bati-sticky-l {
@@ -247,12 +273,12 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d8d0c2;
+  background: #cbd2e0;
   border-radius: 5px;
-  border: 2px solid #faf7f1;
+  border: 2px solid var(--bati-bg);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #b8ae9d;
+  background: #aeb8ca;
 }
 
 input,
@@ -287,7 +313,7 @@ main > div > * {
   background: linear-gradient(
     90deg,
     var(--bati-border-soft) 0%,
-    #f6f2e9 50%,
+    #eef1f6 50%,
     var(--bati-border-soft) 100%
   );
   background-size: 200% 100%;

@@ -9,12 +9,12 @@ export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive';
 export type ButtonSize = 'xs' | 'sm' | 'md';
 
 export const BUTTON_BASE =
-  'inline-flex items-center justify-center gap-2 rounded-md font-medium ' +
+  'inline-flex items-center justify-center gap-2 rounded-lg font-medium ' +
   'transition-[background-color,opacity,transform,box-shadow] duration-150 ' +
   // Two-ring focus treatment: a tight 2px ring in the brand colour, offset
   // by 2px in the page background so it reads cleanly on cards AND on the
-  // bati-bg parchment. Matches `.bati-input` focus chrome.
-  'focus:outline-none focus-visible:ring-2 focus-visible:ring-bati-teal/55 ' +
+  // bati-bg canvas. Matches `.bati-input` focus chrome.
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-bati-primary/55 ' +
   'focus-visible:ring-offset-2 focus-visible:ring-offset-bati-bg ' +
   'disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none ' +
   // ButtonLink needs `no-underline` since Link inherits anchor underline in
@@ -29,12 +29,12 @@ export const BUTTON_SIZE: Record<ButtonSize, string> = {
 
 export const BUTTON_VARIANT: Record<ButtonVariant, string> = {
   primary:
-    'bg-bati-teal text-white hover:bg-bati-teal-deep active:translate-y-px shadow-sm hover:shadow',
+    'bg-bati-primary text-white hover:bg-bati-primary-deep active:translate-y-px shadow-sm hover:shadow',
   secondary:
     'bg-bati-card text-bati-text border border-bati-border hover:bg-bati-border-soft hover:border-bati-muted/30',
   ghost: 'text-bati-text hover:bg-bati-border-soft',
   destructive:
-    'bg-bati-terra text-white hover:bg-[#a04832] active:translate-y-px shadow-sm hover:shadow',
+    'bg-bati-terra text-white hover:bg-[#bb4230] active:translate-y-px shadow-sm hover:shadow',
 };
 
 export function buttonClasses(

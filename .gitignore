@@ -41,3 +41,7 @@ vite.config.d.ts
 # Supabase CLI workspace (caches, runtime artefacts)
 supabase/.temp/
 supabase/.branches/
+
+# Local design scratch — source screenshots & throwaway HTML mockups
+Reference/
+previews/

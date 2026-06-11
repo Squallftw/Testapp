@@ -7,7 +7,7 @@ export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-bati-bg flex">
+    <div className="min-h-screen flex">{/* canvas (incl. zellij) comes from body */}
       {/* Desktop sidebar */}
       <div className="hidden md:flex">
         <Sidebar />
