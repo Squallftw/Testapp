@@ -113,10 +113,10 @@ export function PresentTodayDetail({
         description="Aucun ouvrier n'a été marqué présent aujourd'hui sur vos chantiers actifs."
         action={
           <Link
-            to="/pointage"
+            to="/chantiers"
             className="px-4 py-2 bg-bati-teal text-white rounded-md text-sm font-medium hover:opacity-90"
           >
-            Ouvrir le pointage
+            Voir les chantiers
           </Link>
         }
       />
@@ -127,7 +127,7 @@ export function PresentTodayDetail({
       {rows.map(({ chantier, count }) => (
         <li key={chantier.id}>
           <Link
-            to={`/chantiers/${chantier.id}`}
+            to={`/chantiers/${chantier.id}/pointage`}
             className="flex items-center justify-between gap-3 py-2 hover:bg-bati-border-soft/40 -mx-2 px-2 rounded-md transition-colors"
           >
             <div className="flex items-center gap-2 min-w-0">

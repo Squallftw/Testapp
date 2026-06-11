@@ -3,20 +3,26 @@ import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/rea
 import { addDays, format, parseISO, subDays } from 'date-fns';
 import { useOrg } from '@/contexts/OrgContext';
 import { listChantiers, type Chantier } from '@/data/chantiers';
-import { listAttendance, type Attendance } from '@/data/attendance';
-import { listWorkers, type Worker } from '@/data/workers';
+import { listAttendance } from '@/data/attendance';
+import { listWorkers } from '@/data/workers';
 import { listItems, listStockOnHand } from '@/data/consumables';
-import { getSummariesForOrg, type BudgetSummary } from '@/data/budget-engine';
-import { listTasksForChantier, type TaskWithAssignments } from '@/data/tasks';
+import { getSummariesForOrg } from '@/data/budget-engine';
+import { listTasksForChantier } from '@/data/tasks';
 import { clearDemoData, hasDemoData, seedDemoData } from '@/data/seed-demo';
 import { Button } from '@/components/ui/Button';
 import { ButtonLink } from '@/components/ui/ButtonLink';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { toast } from '@/components/ui/Toast';
-import { ChantierScoreCard } from '@/components/dashboard/ChantierScoreCard';
+import { aggregatePerChantier } from '@/lib/chantier-aggregates';
 import { DashboardKpiStrip } from '@/components/dashboard/DashboardKpiStrip';
 import { PausedChantiersStrip } from '@/components/dashboard/PausedChantiersStrip';
+import { PortfolioForesightStrip } from '@/components/dashboard/PortfolioForesightStrip';
+import { RiskRankedList } from '@/components/dashboard/RiskRankedList';
+import { ActivityBars } from '@/components/dashboard/ActivityBars';
+import { HalfGauge } from '@/components/dashboard/HalfGauge';
+import { useOrgForesight } from '@/data/foresight';
+import { formatMAD } from '@/lib/format';
 import {
   ActiveChantiersDetail,
   AlertsDetail,
@@ -30,6 +36,7 @@ import {
 } from '@/components/dashboard/KpiDetailPanels';
 
 const WINDOW_DAYS = 14;
+const WEEKDAY_FR = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
 export default function HomePage() {
   const { activeOrg } = useOrg();
@@ -199,6 +206,63 @@ export default function HomePage() {
     return cash;
   }, [activeChantiers, summariesById]);
 
+  // Portfolio daily labor cost across active chantiers, aligned to `days`.
+  // Split into the last 7 days vs the prior 7 for the activity bars.
+  const laborDaily = useMemo(() => {
+    const out = new Array(days.length).fill(0);
+    for (const c of activeChantiers) {
+      perChantier.get(c.id)?.laborSeries.forEach((v, i) => {
+        out[i] += v;
+      });
+    }
+    return out;
+  }, [activeChantiers, perChantier, days.length]);
+
+  const presentDaily = useMemo(() => {
+    const out = new Array(days.length).fill(0);
+    for (const c of activeChantiers) {
+      perChantier.get(c.id)?.presentSeries.forEach((v, i) => {
+        out[i] += v;
+      });
+    }
+    return out;
+  }, [activeChantiers, perChantier, days.length]);
+
+  const activityLabels = useMemo(
+    () => days.slice(-7).map((d) => WEEKDAY_FR[parseISO(d).getDay()] ?? ''),
+    [days]
+  );
+  const activityCurrent = useMemo(() => laborDaily.slice(-7), [laborDaily]);
+  const activityPrevious = useMemo(
+    () => laborDaily.slice(-14, -7),
+    [laborDaily]
+  );
+
+  const totalBudget = useMemo(
+    () => activeChantiers.reduce((s, c) => s + (Number(c.budget_total) || 0), 0),
+    [activeChantiers]
+  );
+  const totalSpentActive = useMemo(
+    () =>
+      activeChantiers.reduce((s, c) => {
+        const su = summariesById.get(c.id);
+        return s + (su ? su.total_spent : 0);
+      }, 0),
+    [activeChantiers, summariesById]
+  );
+  const budgetPct =
+    totalBudget > 0 ? Math.min(100, (totalSpentActive / totalBudget) * 100) : 0;
+
+  const orgForesight = useOrgForesight();
+  const activeForesightChantiers = useMemo(
+    () =>
+      (orgForesight.data?.chantiers ?? []).filter((c) => {
+        const ch = chantiers.find((x) => x.id === c.chantierId);
+        return ch?.status === 'active';
+      }),
+    [orgForesight.data, chantiers]
+  );
+
   const isLoading =
     chantiersQ.isLoading ||
     summariesQ.isLoading ||
@@ -232,6 +296,7 @@ export default function HomePage() {
             presentToday={totalPresentToday}
             alertsCount={overBudgetCount + lowStockCount + overdueTasksCount}
             cashPosition={totalCashPosition}
+            presentSeries={presentDaily}
             isLoading={isLoading}
             expandedKey={expandedKpi}
             onToggle={(key) =>
@@ -293,22 +358,44 @@ export default function HomePage() {
             />
           ) : (
             <div className="space-y-4">
-              {activeChantiers.map((c, idx) => {
-                const summary = summariesById.get(c.id) ?? blankSummary(c.id);
-                const agg = perChantier.get(c.id);
-                const tq = taskQueries[idx];
-                const tasks = computeTaskStats(tq?.data ?? []);
-                return (
-                  <ChantierScoreCard
-                    key={c.id}
-                    chantier={c}
-                    summary={summary}
-                    laborTimeSeries={agg?.laborSeries ?? []}
-                    presentToday={agg?.presentToday ?? 0}
-                    tasks={tasks}
+              <PortfolioForesightStrip
+                foresight={orgForesight.data}
+                isLoading={orgForesight.isLoading}
+              />
+              <div>
+                <h2 className="text-sm font-semibold text-bati-text mb-2">
+                  Chantiers actifs — par niveau de risque
+                </h2>
+                <RiskRankedList chantiers={activeForesightChantiers} />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="lg:col-span-2">
+                  <ActivityBars
+                    title="Main d'œuvre — 7 derniers jours vs précédents"
+                    labels={activityLabels}
+                    current={activityCurrent}
+                    previous={activityPrevious}
                   />
-                );
-              })}
+                </div>
+                <HalfGauge
+                  title="Budget consommé"
+                  pct={budgetPct}
+                  caption="du budget total"
+                  legend={[
+                    {
+                      label: 'Dépensé',
+                      value: formatMAD(totalSpentActive),
+                      color: 'var(--bati-primary)',
+                    },
+                    {
+                      label: 'Budget total',
+                      value: formatMAD(totalBudget),
+                      color: 'var(--bati-accent)',
+                    },
+                  ]}
+                />
+              </div>
             </div>
           )}
 
@@ -322,84 +409,6 @@ export default function HomePage() {
       {DEMO_CARD_ENABLED && activeOrg && <DemoDataCard />}
     </div>
   );
-}
-
-// ─── helpers ──────────────────────────────────────────────────────────
-
-function blankSummary(chantierId: string): BudgetSummary {
-  return {
-    chantier_id: chantierId,
-    labor_spent: 0,
-    materials_spent: 0,
-    equipment_spent: 0,
-    payments_received: 0,
-    total_spent: 0,
-    remaining: 0,
-  };
-}
-
-function computeTaskStats(tasks: TaskWithAssignments[]): {
-  done: number;
-  total: number;
-} {
-  let done = 0;
-  for (const t of tasks) {
-    if (t.status === 'done') done++;
-  }
-  return { done, total: tasks.length };
-}
-
-interface ChantierAgg {
-  laborSeries: number[];
-  presentToday: number;
-}
-
-function aggregatePerChantier(
-  attendance: Attendance[],
-  workers: Worker[],
-  days: string[],
-  today: string
-): Map<string, ChantierAgg> {
-  const rateByWorker = new Map(
-    workers.map((w) => [w.id, Number(w.daily_rate) || 0])
-  );
-  // (chantierId → date → labor cost for that day)
-  const labor = new Map<string, Map<string, number>>();
-  // (chantierId → count of present rows today)
-  const today_present = new Map<string, number>();
-
-  for (const a of attendance) {
-    let perChantier = labor.get(a.chantier_id);
-    if (!perChantier) {
-      perChantier = new Map();
-      labor.set(a.chantier_id, perChantier);
-    }
-    let dayCost = perChantier.get(a.attendance_date) ?? 0;
-    if (a.status === 'P') {
-      dayCost += rateByWorker.get(a.worker_id) ?? 0;
-    }
-    dayCost += Number(a.prime_amount) || 0;
-    perChantier.set(a.attendance_date, dayCost);
-
-    if (a.attendance_date === today && a.status === 'P') {
-      today_present.set(a.chantier_id, (today_present.get(a.chantier_id) ?? 0) + 1);
-    }
-  }
-
-  const out = new Map<string, ChantierAgg>();
-  const chantierIds = new Set<string>([
-    ...labor.keys(),
-    ...today_present.keys(),
-  ]);
-  for (const id of chantierIds) {
-    const perDay = labor.get(id);
-    const series = days.map((d) => perDay?.get(d) ?? 0);
-    out.set(id, {
-      laborSeries: series,
-      presentToday: today_present.get(id) ?? 0,
-    });
-  }
-  return out;
 }
 
 // ─── Demo data card ────────────────────────────────────────────────────

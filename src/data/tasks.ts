@@ -105,6 +105,31 @@ export async function listTasksForChantier(
   });
 }
 
+/** Lightweight task row for org-wide rollups (project tiles, dashboards). */
+export interface OrgTaskLite {
+  chantier_id: string;
+  status: TaskStatus;
+  start_date: string | null;
+  duration_days: number | null;
+}
+
+/**
+ * One batched query for every task in the active org — avoids fanning out
+ * listTasksForChantier per chantier when a surface only needs lightweight
+ * rollups (done/total counts, next deadline). Soft-deleted rows excluded.
+ */
+export async function listOrgTasksLite(): Promise<OrgTaskLite[]> {
+  const orgId = getActiveOrgId();
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('chantier_id, status, start_date, duration_days')
+    .eq('org_id', orgId)
+    .is('deleted_at', null);
+  if (error) throw mapSupabaseError(error);
+  return (data ?? []) as unknown as OrgTaskLite[];
+}
+
 export async function getTask(id: string): Promise<TaskWithAssignments> {
   const orgId = getActiveOrgId();
   const supabase = getSupabase();

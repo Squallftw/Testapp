@@ -1,4 +1,5 @@
 import { formatMAD } from '@/lib/format';
+import { Sparkline } from './Sparkline';
 import type { KpiKey } from './KpiDetailPanels';
 
 interface DashboardKpiStripProps {
@@ -6,6 +7,8 @@ interface DashboardKpiStripProps {
   presentToday: number;
   alertsCount: number;
   cashPosition: number;
+  /** Optional daily present-count series for the "présents" tile sparkline. */
+  presentSeries?: number[];
   isLoading?: boolean;
   expandedKey: KpiKey | null;
   onToggle: (key: KpiKey) => void;
@@ -16,6 +19,7 @@ export function DashboardKpiStrip({
   presentToday,
   alertsCount,
   cashPosition,
+  presentSeries,
   isLoading = false,
   expandedKey,
   onToggle,
@@ -36,6 +40,7 @@ export function DashboardKpiStrip({
         label="Présents aujourd'hui"
         value={presentToday}
         accent="success"
+        series={presentSeries}
         isLoading={isLoading}
         active={expandedKey === 'present'}
         onClick={() => onToggle('present')}
@@ -78,11 +83,20 @@ const ACCENT_TEXT: Record<string, string> = {
   muted: 'text-bati-text',
 };
 
+const ACCENT_SPARK: Record<string, string> = {
+  teal: 'var(--bati-primary)',
+  success: 'var(--bati-success)',
+  ochre: 'var(--bati-ochre)',
+  terra: 'var(--bati-terra)',
+  muted: 'var(--bati-muted)',
+};
+
 function Kpi({
   kpiKey,
   label,
   value,
   accent,
+  series,
   isLoading,
   active,
   onClick,
@@ -91,6 +105,7 @@ function Kpi({
   label: string;
   value: React.ReactNode;
   accent: 'teal' | 'success' | 'ochre' | 'terra' | 'muted';
+  series?: number[];
   isLoading?: boolean;
   active: boolean;
   onClick: () => void;
@@ -124,10 +139,20 @@ function Kpi({
           <polyline points="6 9 12 15 18 9" />
         </svg>
       </div>
-      <div
-        className={`text-2xl font-bold mt-1.5 tabular-nums ${ACCENT_TEXT[accent]}`}
-      >
-        {isLoading ? <span className="text-bati-muted">…</span> : value}
+      <div className="mt-1.5 flex items-end justify-between gap-2">
+        <div className={`text-2xl font-bold tabular-nums leading-none ${ACCENT_TEXT[accent]}`}>
+          {isLoading ? <span className="text-bati-muted">…</span> : value}
+        </div>
+        {!isLoading && series && series.length > 1 && (
+          <Sparkline
+            values={series}
+            width={72}
+            height={28}
+            color={ACCENT_SPARK[accent]}
+            showArea
+            strokeWidth={2}
+          />
+        )}
       </div>
     </button>
   );
