@@ -14,7 +14,6 @@ import {
 } from '@/data/consumables';
 import { listChantiers } from '@/data/chantiers';
 import { useOrg } from '@/contexts/OrgContext';
-import { useChantier } from '@/contexts/ChantierContext';
 import { DataTable } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Modal } from '@/components/ui/Modal';
@@ -36,19 +35,16 @@ const columnHelper = createColumnHelper<Consumption>();
 
 export default function ConsumptionPage() {
   const { activeOrg } = useOrg();
-  const { activeChantierId } = useChantier();
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Consumption | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  // URL ?chantier=<id> is the source of truth (so deep-links from chantier-detail
-  // land already-filtered). If absent, fall back to the active chantier context
-  // for users navigating directly to the page.
-  const urlChantier = searchParams.get('chantier');
-  const chantierFilter = urlChantier !== null ? urlChantier : (activeChantierId ?? '');
+  // URL ?chantier=<id> is the sole source of truth — deep-links from a
+  // chantier's Matériaux tab land already-filtered; no param = all chantiers.
+  const chantierFilter = searchParams.get('chantier') ?? '';
   const setChantierFilter = (value: string) => {
     const next = new URLSearchParams(searchParams);
-    next.set('chantier', value); // empty string = "all" (overrides context default)
+    next.set('chantier', value); // empty string = "all"
     setSearchParams(next, { replace: true });
   };
 
@@ -210,7 +206,7 @@ export default function ConsumptionPage() {
         <ConsumeModal
           chantiers={chantiers.data ?? []}
           items={items.data ?? []}
-          defaultChantierId={activeChantierId ?? ''}
+          defaultChantierId={chantierFilter}
           onClose={() => setCreating(false)}
         />
       )}

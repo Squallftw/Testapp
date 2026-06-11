@@ -15,14 +15,14 @@ export type ChantierBudgetTab = 'pointage' | 'consommables' | 'materiels';
 
 interface ChantierBudgetViewProps {
   chantier: Chantier;
-  /** Switch tab inside the parent ChantierDetailPage without changing route. */
+  /** Open a sibling tab of the chantier detail page (routed — see detail-tabs.tsx). */
   onNavigateTab?: (tab: ChantierBudgetTab) => void;
 }
 
 /**
  * Chantier-scoped budget breakdown: labor/materials/total progress bars, plus
- * payments-received and remaining-headroom cards. Click-throughs switch the
- * parent's active tab rather than navigating away.
+ * payments-received and remaining-headroom cards. Click-throughs open the
+ * matching tab route of the parent chantier.
  */
 export function ChantierBudgetView({ chantier, onNavigateTab }: ChantierBudgetViewProps) {
   const { activeOrg, myRole } = useOrg();

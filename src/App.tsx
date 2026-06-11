@@ -3,7 +3,6 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { OrgProvider } from '@/contexts/OrgContext';
-import { ChantierProvider } from '@/contexts/ChantierContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { PublicRoute } from '@/components/PublicRoute';
 import { AppShell } from '@/components/AppShell';
@@ -31,16 +30,26 @@ const WorkersListPage    = lazy(() => import('@/pages/workers/WorkersListPage'))
 const WorkerEditPage     = lazy(() => import('@/pages/workers/WorkerEditPage'));
 const OrgSettingsPage    = lazy(() => import('@/pages/settings/OrgSettingsPage'));
 const MembersPage        = lazy(() => import('@/pages/settings/MembersPage'));
-const PointagePage       = lazy(() => import('@/pages/pointage/PointagePage'));
 const ConsommablesLayout = lazy(() => import('@/pages/consommables/ConsommablesLayout'));
 const ArticlesPage       = lazy(() => import('@/pages/consommables/ArticlesPage'));
 const SuppliersPage      = lazy(() => import('@/pages/consommables/SuppliersPage'));
 const PurchasesPage      = lazy(() => import('@/pages/consommables/PurchasesPage'));
 const ConsumptionPage    = lazy(() => import('@/pages/consommables/ConsumptionPage'));
 const MovementsPage      = lazy(() => import('@/pages/consommables/MovementsPage'));
-const PlanningPage       = lazy(() => import('@/pages/planning/PlanningPage'));
 const MaterielsListPage  = lazy(() => import('@/pages/materiels/MaterielsListPage'));
 const PublicChantierPage = lazy(() => import('@/pages/public/PublicChantierPage'));
+
+// Chantier detail tab routes — all panels live in one module so Vite emits a
+// single chunk, fetched together with the detail layout; switching tabs after
+// that never touches the network.
+const detailTabs = () => import('@/pages/chantiers/detail-tabs');
+const ChantierOverviewTab     = lazy(() => detailTabs().then((m) => ({ default: m.OverviewTab })));
+const ChantierPlanningTab     = lazy(() => detailTabs().then((m) => ({ default: m.PlanningTab })));
+const ChantierPointageTab     = lazy(() => detailTabs().then((m) => ({ default: m.PointageTab })));
+const ChantierMateriauxTab    = lazy(() => detailTabs().then((m) => ({ default: m.MateriauxTab })));
+const ChantierMaterielsTab    = lazy(() => detailTabs().then((m) => ({ default: m.MaterielsTab })));
+const ChantierBudgetTab       = lazy(() => detailTabs().then((m) => ({ default: m.BudgetTab })));
+const RedirectToChantierIndex = lazy(() => detailTabs().then((m) => ({ default: m.RedirectToChantierIndex })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -75,7 +84,7 @@ export default function App() {
             <Route
               path="/c/:slug"
               element={
-                <Suspense fallback={<div style={{ minHeight: '100vh', background: '#f6efe1' }} />}>
+                <Suspense fallback={<div style={{ minHeight: '100vh', background: 'var(--bati-bg)' }} />}>
                   <PublicChantierPage />
                 </Suspense>
               }
@@ -108,10 +117,24 @@ export default function App() {
 
                   {/* Chantiers — list + detail open to any role (RLS narrows for site_managers). */}
                   <Route path="/chantiers" element={<ChantiersListPage />} />
-                  <Route path="/chantiers/:id" element={<ChantierDetailPage />} />
+                  {/* Detail page is a layout; each tab is a nested route so it
+                      can be deep-linked and survives a refresh. Index = overview.
+                      The static /chantiers/:id/edit sibling below still outranks
+                      the catch-all child (route ranking). */}
+                  <Route path="/chantiers/:id" element={<ChantierDetailPage />}>
+                    <Route index element={<ChantierOverviewTab />} />
+                    <Route path="planning" element={<ChantierPlanningTab />} />
+                    <Route path="pointage" element={<ChantierPointageTab />} />
+                    <Route path="materiaux" element={<ChantierMateriauxTab />} />
+                    <Route path="materiels" element={<ChantierMaterielsTab />} />
+                    <Route path="budget" element={<ChantierBudgetTab />} />
+                    <Route path="*" element={<RedirectToChantierIndex />} />
+                  </Route>
 
-                  <Route path="/pointage" element={<PointagePage />} />
-                  <Route path="/planning" element={<PlanningPage />} />
+                  {/* Pointage & Planning moved inside each chantier (project-first
+                      IA). Old bookmarks land on the chantiers list, not a 404. */}
+                  <Route path="/pointage" element={<Navigate to="/chantiers" replace />} />
+                  <Route path="/planning" element={<Navigate to="/chantiers" replace />} />
                   <Route path="/consommables" element={<ConsommablesLayout />}>
                     <Route index element={<Navigate to="articles" replace />} />
                     <Route path="articles" element={<ArticlesPage />} />
@@ -145,19 +168,17 @@ export default function App() {
   );
 }
 
-// Layout outlet that provides the OrgProvider + ChantierProvider stack to
-// every app route that needs an active org. Kept private to App.tsx — the
-// /c/:slug public route deliberately sits outside this wrapper.
+// Layout outlet that provides the OrgProvider to every app route that needs
+// an active org. Kept private to App.tsx — the /c/:slug public route
+// deliberately sits outside this wrapper.
 // The inner Suspense catches lazy-loaded admin pages during navigation;
 // fallback is transparent so the AppShell stays visible underneath.
 function AppProvidersOutlet() {
   return (
     <OrgProvider>
-      <ChantierProvider>
-        <Suspense fallback={null}>
-          <Outlet />
-        </Suspense>
-      </ChantierProvider>
+      <Suspense fallback={null}>
+        <Outlet />
+      </Suspense>
     </OrgProvider>
   );
 }
